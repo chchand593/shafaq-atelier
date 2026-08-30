@@ -1,0 +1,188 @@
+// Prisma schema for the ShafaQ Atelier abaya store.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String     @id @default(cuid())
+  email         String     @unique
+  name          String?
+  passwordHash  String
+  role          String     @default("customer") // customer | admin
+  loyaltyPoints Int        @default(0)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  orders        Order[]
+  reviews       Review[]
+  wishlist      WishlistItem[]
+  pointTransactions PointTransaction[]
+}
+
+model Product {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  name          String
+  category      String   // Daily Wear | New Arrivals | Best Sellers
+  price         Int
+  originalPrice Int?
+  image         String
+  colors        String   // JSON array of {hex,name}
+  sizes         String   // JSON array of strings
+  rating        Float    @default(4.8)
+  reviewCount   Int      @default(0)
+  stock         Int      @default(50)
+  lowStockThreshold Int  @default(5)
+  active        Boolean  @default(true) // admin can hide from storefront
+  badge         String?
+  fabric        String
+  care          String
+  description   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  reviews       Review[]
+  wishlistItems WishlistItem[]
+  @@index([category])
+}
+
+model Order {
+  id          String   @id @default(cuid())
+  number      String   @unique // human-friendly LM-XXXXXXXX
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+  email       String
+  fullName    String
+  phone       String
+  address     String
+  city        String
+  province    String
+  postal      String
+  notes       String?
+  payment     String   // cod | bank_transfer | online
+  paymentStatus String @default("pending") // pending | paid | failed | refunded
+  paymentProvider  String? // jazzcash | bank_transfer | easypaisa | stripe | etc.
+  paymentReference String? // customer-supplied transaction/reference ID (for manual bank transfer) or gateway transaction ref
+  paymentScreenshotPath String? // optional uploaded screenshot path (admin-only view) — null if not used
+  paidAt      DateTime?
+  paymentFailureReason String?
+  paymentVerifiedById String? // admin user id who verified/rejected the payment (audit)
+  paymentVerifiedAt DateTime?
+  subtotal    Int
+  discount    Int      @default(0)
+  shipping    Int
+  total       Int
+  promoCode   String?
+  status      String   @default("processing") // processing | shipped | delivered | cancelled
+  clientToken String?  // unique token to prevent duplicate submissions
+  createdAt   DateTime @default(now())
+  items       OrderItem[]
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  name      String
+  image     String
+  price     Int
+  qty       Int
+  color     String
+  colorName String
+  size      String
+}
+
+model Review {
+  id          String   @id @default(cuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  authorName  String
+  rating      Int      // 1-5
+  title       String
+  body        String
+  verified    Boolean  @default(false) // true if author has purchased the product
+  helpful     Int      @default(0)
+  adminReply  String?
+  adminReplyAt DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([productId])
+}
+
+model WishlistItem {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+  @@index([userId])
+}
+
+model GiftCard {
+  id          String   @id @default(cuid())
+  code        String   @unique // LMGC-XXXXXXXX
+  amount      Int      // face value in PKR
+  balance     Int      // remaining balance
+  buyerEmail  String?
+  buyerName   String?
+  recipientEmail String
+  recipientName  String
+  message     String?
+  status      String   @default("active") // active | redeemed | expired
+  orderId     String?  // linked purchase order
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime?
+
+  @@index([recipientEmail])
+}
+
+model PointTransaction {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  points      Int      // positive = earned, negative = redeemed
+  type        String   // earned | redeemed | adjusted
+  description String
+  orderId     String?
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+}
+
+// Singleton row (id = "default") holding editable store configuration.
+// Sensitive payment credentials (JazzCash gateway API keys, Integrity Salt) remain
+// in environment variables and are never stored here. The fields below are
+// business-facing payment instructions (JazzCash mobile number, bank account
+// details) shown to customers during checkout for MANUAL bank transfer.
+model StoreSettings {
+  id                  String   @id @default("default")
+  businessName        String   @default("ShafaQ Atelier")
+  businessAddress     String   @default("M.A. Jinnah Road, Okara, Punjab, Pakistan")
+  businessEmail       String   @default("hello@shafaqatelier.pk")
+  businessPhone       String   @default("+92 300 1234567")
+  businessWhatsapp    String   @default("+92 300 1234567")
+  shippingCharge      Int      @default(350)
+  freeShippingThreshold Int    @default(10000)
+  lowStockThreshold   Int      @default(5)
+  storeOpen           Boolean  @default(true)
+  announcement        String?
+  // Manual bank transfer payment instructions (shown to customer at checkout)
+  jazzCashNumber      String   @default("03256912201")
+  bankName            String   @default("Raqmi Islamic Digital Bank")
+  bankAccountNumber   String   @default("028846199786")
+  bankAccountTitle    String   @default("ShafaQ Atelier")
+  manualTransferEnabled Boolean @default(true)
+  codEnabled          Boolean  @default(true)
+  updatedAt           DateTime @updatedAt
+}
