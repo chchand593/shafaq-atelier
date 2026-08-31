@@ -22,7 +22,7 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { formatPKR } from "@/lib/format";
 import { useUI, useWishlist } from "@/lib/store";
-import { PRODUCTS } from "@/lib/site-data";
+import { useProductsByIds } from "@/lib/use-products";
 import { toast } from "sonner";
 
 type Order = {
@@ -178,13 +178,7 @@ function OrdersTab({ orders, loading }: { orders: Order[]; loading: boolean }) {
 
 function WishlistTab() {
   const wishlistIds = useWishlist((s) => s.ids);
-  const items = React.useMemo(
-    () =>
-      wishlistIds
-        .map((id) => PRODUCTS.find((p) => p.id === id))
-        .filter((p): p is NonNullable<typeof p> => Boolean(p)),
-    [wishlistIds]
-  );
+  const { products: items } = useProductsByIds(wishlistIds);
 
   if (items.length === 0) {
     return (

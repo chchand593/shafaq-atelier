@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useUI, useWishlist, useCart } from "@/lib/store";
-import { PRODUCTS } from "@/lib/site-data";
+import { useProductsByIds } from "@/lib/use-products";
 import { formatPKR } from "@/lib/format";
 import { toast } from "sonner";
 
@@ -43,15 +43,9 @@ export function WishlistDrawer() {
   const addToCart = useCart((s) => s.add);
   const setCartOpen = useUI((s) => s.setCartOpen);
 
-  const items = React.useMemo(
-    () =>
-      ids
-        .map((id) => PRODUCTS.find((p) => p.id === id))
-        .filter((p): p is NonNullable<typeof p> => Boolean(p)),
-    [ids]
-  );
+  const { products: items } = useProductsByIds(ids);
 
-  const onMoveToCart = (product: (typeof PRODUCTS)[number]) => {
+  const onMoveToCart = (product: NonNullable<typeof items[number]>) => {
     // default to first colour and a medium size for quick-add
     const color = product.colorOptions[0];
     addToCart({
@@ -70,7 +64,7 @@ export function WishlistDrawer() {
     });
   };
 
-  const onView = (product: (typeof PRODUCTS)[number]) => {
+  const onView = (product: NonNullable<typeof items[number]>) => {
     setWishlistOpen(false);
     openQuickView(product);
   };

@@ -15,7 +15,6 @@ import {
   ChevronRight,
   ChevronLeft,
   Zap,
-  Ruler,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -339,13 +338,6 @@ export function ProductDetail({
           <div>
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">Size</span>
-              <a
-                href="/size-guide"
-                className="inline-flex items-center gap-1 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-              >
-                <Ruler className="size-3.5" />
-                Size guide
-              </a>
             </div>
             <div className="mt-2 flex flex-wrap gap-2">
               {product.sizes.map((s) => (
@@ -479,18 +471,11 @@ export function ProductDetail({
                 Size &amp; Fit
               </AccordionTrigger>
               <AccordionContent className="text-sm text-muted-foreground">
-                <p className="mb-3">
+                <p>
                   Our abayas are designed for a flowing, modest fit. For a
                   relaxed silhouette, consider sizing up. Measurements are of
                   the garment, not the body — allow ±2cm tolerance.
                 </p>
-                <a
-                  href="/size-guide"
-                  className="inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-xs font-medium uppercase tracking-wider transition-colors hover:border-foreground/40"
-                >
-                  <Ruler className="size-3.5" />
-                  View Full Size Guide
-                </a>
               </AccordionContent>
             </AccordionItem>
             <AccordionItem value="shipping">

@@ -1,14 +1,33 @@
 "use client";
 
+import * as React from "react";
 import { ArrowRight, Gift } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ProductCard } from "@/components/site/product-card";
 import { SectionHeader } from "@/components/site/section-header";
-import { PRODUCTS } from "@/lib/site-data";
+import { useApiProducts } from "@/lib/use-products";
 import { useUI } from "@/lib/store";
 
+function CardSkeleton() {
+  return (
+    <div className="flex flex-col overflow-hidden rounded-xl border bg-card">
+      <div className="aspect-[4/5] w-full skeleton-shimmer" />
+      <div className="flex flex-col gap-2 p-4">
+        <div className="h-3 w-20 skeleton-shimmer rounded" />
+        <div className="h-4 w-3/4 skeleton-shimmer rounded" />
+        <div className="h-3 w-1/2 skeleton-shimmer rounded" />
+        <div className="mt-2 h-5 w-24 skeleton-shimmer rounded" />
+      </div>
+    </div>
+  );
+}
+
 export function BestSellers() {
-  const products = PRODUCTS.filter((p) => p.category === "Best Sellers");
+  const { products, loading } = useApiProducts();
+  const list = React.useMemo(
+    () => products.filter((p) => p.category === "Best Sellers"),
+    [products]
+  );
   const { setGiftCardOpen } = useUI();
 
   return (
@@ -22,9 +41,11 @@ export function BestSellers() {
         />
 
         <div className="mt-12 grid grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-4">
-          {products.map((product) => (
-            <ProductCard key={product.id} product={product} />
-          ))}
+          {loading && list.length === 0
+            ? Array.from({ length: 4 }).map((_, i) => <CardSkeleton key={i} />)
+            : list.map((product) => (
+                <ProductCard key={product.id} product={product} />
+              ))}
 
           {/* Editorial promo tile — Gift Card */}
           <div className="col-span-2 flex flex-col justify-between overflow-hidden rounded-xl border bg-gradient-to-br from-secondary to-secondary/60 p-6 sm:p-8 lg:col-span-2">

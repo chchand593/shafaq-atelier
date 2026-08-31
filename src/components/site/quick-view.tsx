@@ -30,7 +30,8 @@ import {
 } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
 import { useUI, useCart, useWishlist, useRecentlyViewed } from "@/lib/store";
-import { PRODUCTS, type Product } from "@/lib/site-data";
+import { useApiProducts } from "@/lib/use-products";
+import type { Product } from "@/lib/site-data";
 import { formatPKR } from "@/lib/format";
 import { toast } from "sonner";
 import { ProductCard } from "@/components/site/product-card";
@@ -85,6 +86,7 @@ function QuickViewInner({ product }: { product: Product }) {
   const addToCart = useCart((s) => s.add);
   const { toggle, ids } = useWishlist();
   const pushRecentlyViewed = useRecentlyViewed((s) => s.push);
+  const { products: allProducts } = useApiProducts();
 
   const [activeColor, setActiveColor] = React.useState(product.colorOptions[0]);
   const [activeSize, setActiveSize] = React.useState<string | null>(null);
@@ -105,6 +107,14 @@ function QuickViewInner({ product }: { product: Product }) {
   }, [product.id, pushRecentlyViewed]);
 
   const wished = ids.includes(product.id);
+
+  const related = React.useMemo(
+    () =>
+      allProducts
+        .filter((p) => p.category === product.category && p.id !== product.id)
+        .slice(0, 4),
+    [allProducts, product.category, product.id]
+  );
 
   const onAddToCart = () => {
     if (!activeSize) {
@@ -135,10 +145,6 @@ function QuickViewInner({ product }: { product: Product }) {
       description: product.name,
     });
   };
-
-  const related = PRODUCTS.filter(
-    (p) => p.category === product.category && p.id !== product.id
-  ).slice(0, 4);
 
   return (
     <DialogContent
@@ -278,13 +284,6 @@ function QuickViewInner({ product }: { product: Product }) {
           <div>
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">Size</span>
-              <a
-                href="/size-guide"
-                onClick={() => closeQuickView()}
-                className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-              >
-                Size guide
-              </a>
             </div>
             <div className="mt-2 flex flex-wrap gap-2">
               {product.sizes.map((s) => (

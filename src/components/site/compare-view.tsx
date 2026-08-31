@@ -9,12 +9,13 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { formatPKR } from "@/lib/format";
 import { useCompare, MAX_COMPARE, useUI } from "@/lib/store";
-import { PRODUCTS } from "@/lib/site-data";
+import { useProductsByIds } from "@/lib/use-products";
+import type { Product } from "@/lib/site-data";
 
 type Row = {
   label: string;
-  key: (p: (typeof PRODUCTS)[number]) => React.ReactNode;
-  highlight?: (p: (typeof PRODUCTS)[number]) => boolean;
+  key: (p: Product) => React.ReactNode;
+  highlight?: (p: Product) => boolean;
 };
 
 const ROWS: Row[] = [
@@ -95,15 +96,9 @@ export function CompareView() {
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => setMounted(true), []);
 
-  const items = React.useMemo(
-    () =>
-      ids
-        .map((id) => PRODUCTS.find((p) => p.id === id))
-        .filter((p): p is NonNullable<typeof p> => Boolean(p)),
-    [ids]
-  );
+  const { products: items, loading } = useProductsByIds(ids);
 
-  if (!mounted) {
+  if (!mounted || loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
         <div className="skeleton-shimmer size-8 rounded-full" />

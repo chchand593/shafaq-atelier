@@ -7,16 +7,15 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
-// Resolve the NextAuth secret. In production, if the secret is missing
-// (e.g. during build), log an error but don't throw — throwing would
-// crash the middleware and break all /admin routes. At runtime, Vercel
-// injects the real NEXTAUTH_SECRET and this function returns it.
+// Resolve the NextAuth secret. In production we MUST fail loudly if it is
+// missing — silently falling back to a hard-coded string would let anyone
+// forge JWTs and bypass admin protection.
 function resolveNextAuthSecret(): string {
   const secret = process.env.NEXTAUTH_SECRET;
   if (secret && secret.length >= 16) return secret;
   if (process.env.NODE_ENV === "production") {
-    console.error(
-      "NEXTAUTH_SECRET is missing or too short (min 16 chars). Set it in your Vercel environment variables."
+    throw new Error(
+      "NEXTAUTH_SECRET is missing or too short (min 16 chars). Set a strong random value in your production environment."
     );
   }
   return "shafaq-atelier-dev-secret-change-me";

@@ -16,8 +16,11 @@ export async function GET(request: Request) {
 
   const tokens = q.split(/\s+/).filter(Boolean);
   // SQLite LIKE is case-insensitive for ASCII; we filter further in JS for robustness.
+  // SECURITY: only active products are returned to customers. Inactive or deleted
+  // products must never surface in search even if their row still exists.
   const products = await db.product.findMany({
     where: {
+      active: true,
       OR: tokens.flatMap((t) => [
         { name: { contains: t } },
         { category: { contains: t } },

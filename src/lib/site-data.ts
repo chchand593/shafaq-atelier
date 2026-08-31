@@ -20,7 +20,6 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Customized Abayas", href: "/customized-abayas" },
   { label: "New Arrivals", href: "#new-arrivals" },
   { label: "About Us", href: "/about" },
-  { label: "Size Guide", href: "/size-guide" },
   { label: "Contact Us", href: "/contact" },
 ];
 

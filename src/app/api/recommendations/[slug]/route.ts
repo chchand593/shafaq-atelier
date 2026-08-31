@@ -52,13 +52,14 @@ export async function GET(
   const viewed = searchParams.get("viewed")?.split(",").filter(Boolean) || [];
 
   const product = await db.product.findUnique({ where: { slug } });
-  if (!product) {
+  if (!product || !product.active) {
     return NextResponse.json({ error: "Product not found" }, { status: 404 });
   }
 
-  // Same category, excluding current product
+  // Same category, excluding current product. Only active products are
+  // recommended — deleted/deactivated products must never appear here.
   const sameCategory = await db.product.findMany({
-    where: { category: product.category, slug: { not: slug } },
+    where: { category: product.category, slug: { not: slug }, active: true },
     take: 4,
     orderBy: { rating: "desc" },
   });
@@ -67,7 +68,7 @@ export async function GET(
   const viewedCategories: string[] = [];
   if (viewed.length > 0) {
     const viewedProducts = await db.product.findMany({
-      where: { slug: { in: viewed }, category: { not: product.category } },
+      where: { slug: { in: viewed }, category: { not: product.category }, active: true },
       select: { category: true },
       distinct: ["category"],
     });
@@ -79,6 +80,7 @@ export async function GET(
   const fillers = await db.product.findMany({
     where: {
       slug: { notIn: excludeSlugs },
+      active: true,
       ...(viewedCategories.length > 0
         ? { category: { in: viewedCategories } }
         : {}),
@@ -91,7 +93,7 @@ export async function GET(
   const allExcluded = [...excludeSlugs, ...fillers.map((p) => p.slug)];
   if (sameCategory.length + fillers.length < 4) {
     const extra = await db.product.findMany({
-      where: { slug: { notIn: allExcluded } },
+      where: { slug: { notIn: allExcluded }, active: true },
       take: 4 - sameCategory.length - fillers.length,
       orderBy: { rating: "desc" },
     });

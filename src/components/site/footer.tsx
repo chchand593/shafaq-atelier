@@ -22,7 +22,6 @@ const SHOP_LINKS = [
 ];
 
 const SUPPORT_LINKS: { label: string; href: string }[] = [
-  { label: "Size Guide", href: "/size-guide" },
   { label: "Shipping & Returns", href: "#support" },
   { label: "Track Your Order", href: "#support" },
   { label: "Care Instructions", href: "#support" },

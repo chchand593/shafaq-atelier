@@ -44,6 +44,9 @@ export async function GET() {
 }
 
 // POST /api/wishlist — add or remove a product (toggle)
+// The client sends productId = product SLUG (the public id used everywhere
+// on the storefront). The WishlistItem FK references Product.id (cuid), so we
+// must resolve the slug to the actual product id before writing.
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
@@ -52,8 +55,8 @@ export async function POST(request: Request) {
       { status: 401 }
     );
   }
-  const { productId } = (await request.json()) as { productId?: string };
-  if (!productId) {
+  const { productId: productSlug } = (await request.json()) as { productId?: string };
+  if (!productSlug) {
     return NextResponse.json({ error: "productId required" }, { status: 400 });
   }
 
@@ -64,8 +67,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
+  // Resolve slug → Product.id (cuid). If the product no longer exists (was
+  // deleted by admin), silently no-op so the client wishlist stays consistent.
+  const product = await db.product.findUnique({
+    where: { slug: productSlug },
+    select: { id: true },
+  });
+  if (!product) {
+    return NextResponse.json({ ok: true, action: "noop", reason: "product-gone" });
+  }
+
   const existing = await db.wishlistItem.findUnique({
-    where: { userId_productId: { userId: user.id, productId } },
+    where: { userId_productId: { userId: user.id, productId: product.id } },
   });
 
   if (existing) {
@@ -74,7 +87,7 @@ export async function POST(request: Request) {
   }
 
   await db.wishlistItem.create({
-    data: { userId: user.id, productId },
+    data: { userId: user.id, productId: product.id },
   });
   return NextResponse.json({ ok: true, action: "added" });
 }

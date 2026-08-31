@@ -3,28 +3,21 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 
-// Resolve the NextAuth secret.
-// During `next build` (NODE_ENV=production), environment variables like
-// NEXTAUTH_SECRET may not be available — Vercel only injects them at runtime.
-// If we threw an error at module-load time, the build's page-data collection
-// would fail. Instead, we return the env value if available, or a temporary
-// placeholder during build. The real secret is used at runtime when the
-// server starts and env vars ARE set.
+// Resolve the NextAuth secret at boot. In production we MUST fail loudly if it
+// is missing — silently falling back to a hard-coded string would let anyone
+// forge JWTs. In development we tolerate a fallback for convenience.
 function resolveNextAuthSecret(): string {
   const secret = process.env.NEXTAUTH_SECRET;
   if (secret && secret.length >= 16) return secret;
-  // During build (no env vars), return a placeholder so the build succeeds.
-  // At runtime, if the secret is still missing in production, NextAuth will
-  // reject requests with a clear error.
   if (process.env.NODE_ENV === "production") {
-    console.error(
-      "NEXTAUTH_SECRET is missing or too short (min 16 chars). Set it in your Vercel environment variables."
-    );
-  } else {
-    console.warn(
-      "[auth] WARNING: NEXTAUTH_SECRET is missing — using insecure development fallback."
+    throw new Error(
+      "NEXTAUTH_SECRET is missing or too short (min 16 chars). Set a strong random value in your production environment before starting the app."
     );
   }
+  // Development fallback only. Logged once.
+  console.warn(
+    "[auth] WARNING: NEXTAUTH_SECRET is missing — using insecure development fallback. Set NEXTAUTH_SECRET in .env before deploying."
+  );
   return "shafaq-atelier-dev-secret-change-me";
 }
 

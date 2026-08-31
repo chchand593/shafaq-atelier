@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import {
   Check,
   ChevronLeft,
@@ -803,7 +802,7 @@ function StepContent({
           <div className="mt-4 rounded-lg border bg-secondary/40 p-4 text-sm">
             <p className="font-medium">Not sure of your measurements?</p>
             <p className="mt-1 text-muted-foreground">
-              Visit our <Link href="/size-guide" className="underline hover:text-foreground">size guide</Link> or book a free fitting consultation. We'll confirm all measurements before crafting begins.
+              Book a free fitting consultation with our team. We'll confirm all measurements before crafting begins to ensure your custom abaya fits perfectly.
             </p>
           </div>
         </StepShell>

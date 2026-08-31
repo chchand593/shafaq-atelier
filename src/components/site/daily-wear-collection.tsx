@@ -8,10 +8,8 @@ import {
   Search,
   ChevronDown,
   PackageX,
-  Star,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -26,46 +24,18 @@ import { cn } from "@/lib/utils";
 import { formatPKR } from "@/lib/format";
 import { ProductCard } from "@/components/site/product-card";
 import {
-  PRODUCTS,
   ALL_SIZES,
   type Product,
 } from "@/lib/site-data";
+import { useApiProducts } from "@/lib/use-products";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const DAILY_WEAR = PRODUCTS.filter((p) => p.category === "Daily Wear");
-
-// Unique colours across daily wear products
-const ALL_COLORS = Array.from(
-  new Map(
-    DAILY_WEAR.flatMap((p) => p.colorOptions).map((c) => [c.hex, c])
-  ).values()
-);
-
-// Unique fabrics (short label derived from the fabric string)
-const ALL_FABRICS = Array.from(
-  new Set(
-    DAILY_WEAR.map((p) => {
-      // Extract short fabric label from the full fabric description
-      const f = p.fabric;
-      if (f.includes("matte crepe")) return "Matte Crepe";
-      if (f.includes("nida")) return "Nida";
-      if (f.includes("satin-crepe") || f.includes("satin crepe"))
-        return "Satin Crepe";
-      if (f.includes("chiffon")) return "Chiffon";
-      if (f.includes("silk")) return "Silk Blend";
-      if (f.includes("travel crepe")) return "Travel Crepe";
-      if (f.includes("heavyweight crepe")) return "Heavyweight Crepe";
-      if (f.includes("layered crepe")) return "Layered Crepe";
-      return "Other";
-    })
-  )
-).sort();
-
-const PRICE_MIN = Math.min(...DAILY_WEAR.map((p) => p.price));
-const PRICE_MAX = Math.max(...DAILY_WEAR.map((p) => p.price));
+// Unique colours across daily wear products (computed at runtime from the
+// live DB-driven product list — see DailyWearCollection component below).
+// Unique fabrics (short label derived from the fabric string).
 
 type SortKey = "featured" | "newest" | "price-asc" | "price-desc" | "best-selling";
 
@@ -87,9 +57,12 @@ type Filters = {
   search: string;
 };
 
-const DEFAULT_FILTERS: Filters = {
-  priceMin: PRICE_MIN,
-  priceMax: PRICE_MAX,
+const DEFAULT_PRICE_MIN_FALLBACK = 5000;
+const DEFAULT_PRICE_MAX_FALLBACK = 20000;
+
+const EMPTY_FILTERS: Filters = {
+  priceMin: 0,
+  priceMax: Number.MAX_SAFE_INTEGER,
   sizes: [],
   colors: [],
   fabrics: [],
@@ -175,9 +148,9 @@ function applyFilters(
   return list;
 }
 
-function countActiveFilters(f: Filters): number {
+function countActiveFilters(f: Filters, priceMin: number, priceMax: number): number {
   let n = 0;
-  if (f.priceMin !== PRICE_MIN || f.priceMax !== PRICE_MAX) n++;
+  if (f.priceMin !== priceMin || f.priceMax !== priceMax) n++;
   if (f.sizes.length > 0) n += f.sizes.length;
   if (f.colors.length > 0) n += f.colors.length;
   if (f.fabrics.length > 0) n += f.fabrics.length;
@@ -193,9 +166,17 @@ function countActiveFilters(f: Filters): number {
 function FilterPanel({
   filters,
   setFilters,
+  allColors,
+  allFabrics,
+  priceMin,
+  priceMax,
 }: {
   filters: Filters;
   setFilters: React.Dispatch<React.SetStateAction<Filters>>;
+  allColors: { hex: string; name: string }[];
+  allFabrics: string[];
+  priceMin: number;
+  priceMax: number;
 }) {
   const toggleArray = (key: "sizes" | "colors" | "fabrics", val: string) =>
     setFilters((f) => ({
@@ -218,15 +199,15 @@ function FilterPanel({
               setFilters((f) => ({
                 ...f,
                 priceMin: Math.min(
-                  Number(e.target.value) || PRICE_MIN,
+                  Number(e.target.value) || priceMin,
                   f.priceMax
                 ),
               }))
             }
             className="h-9 text-sm"
-            placeholder={String(PRICE_MIN)}
-            min={PRICE_MIN}
-            max={PRICE_MAX}
+            placeholder={String(priceMin)}
+            min={priceMin}
+            max={priceMax}
           />
           <span className="text-muted-foreground">—</span>
           <Input
@@ -236,15 +217,15 @@ function FilterPanel({
               setFilters((f) => ({
                 ...f,
                 priceMax: Math.max(
-                  Number(e.target.value) || PRICE_MAX,
+                  Number(e.target.value) || priceMax,
                   f.priceMin
                 ),
               }))
             }
             className="h-9 text-sm"
-            placeholder={String(PRICE_MAX)}
-            min={PRICE_MIN}
-            max={PRICE_MAX}
+            placeholder={String(priceMax)}
+            min={priceMin}
+            max={priceMax}
           />
         </div>
         <p className="mt-1.5 text-xs text-muted-foreground">
@@ -286,7 +267,7 @@ function FilterPanel({
       <div>
         <h3 className="eyebrow text-[var(--mocha)]">Colour</h3>
         <div className="mt-3 space-y-1.5">
-          {ALL_COLORS.map((c) => {
+          {allColors.map((c) => {
             const checked = filters.colors.includes(c.hex);
             return (
               <button
@@ -317,7 +298,7 @@ function FilterPanel({
       <div>
         <h3 className="eyebrow text-[var(--mocha)]">Fabric</h3>
         <div className="mt-3 space-y-1.5">
-          {ALL_FABRICS.map((fab) => {
+          {allFabrics.map((fab) => {
             const checked = filters.fabrics.includes(fab);
             return (
               <label
@@ -366,21 +347,27 @@ function ActiveFilterChips({
   filters,
   setFilters,
   onClearAll,
+  allColors,
+  priceMin,
+  priceMax,
 }: {
   filters: Filters;
   setFilters: React.Dispatch<React.SetStateAction<Filters>>;
   onClearAll: () => void;
+  allColors: { hex: string; name: string }[];
+  priceMin: number;
+  priceMax: number;
 }) {
   const chips: { label: string; onRemove: () => void }[] = [];
 
-  if (filters.priceMin !== PRICE_MIN || filters.priceMax !== PRICE_MAX) {
+  if (filters.priceMin !== priceMin || filters.priceMax !== priceMax) {
     chips.push({
       label: `${formatPKR(filters.priceMin)}–${formatPKR(filters.priceMax)}`,
       onRemove: () =>
         setFilters((f) => ({
           ...f,
-          priceMin: PRICE_MIN,
-          priceMax: PRICE_MAX,
+          priceMin,
+          priceMax,
         })),
     });
   }
@@ -394,7 +381,7 @@ function ActiveFilterChips({
   }
 
   for (const hex of filters.colors) {
-    const c = ALL_COLORS.find((x) => x.hex === hex);
+    const c = allColors.find((x) => x.hex === hex);
     chips.push({
       label: `Colour: ${c?.name || hex}`,
       onRemove: () =>
@@ -463,22 +450,97 @@ function ActiveFilterChips({
 const ITEMS_PER_PAGE = 8;
 
 export function DailyWearCollection() {
-  const [filters, setFilters] = React.useState<Filters>(DEFAULT_FILTERS);
+  const { products: allProducts, loading: productsLoading } = useApiProducts();
+  const dailyWear = React.useMemo(
+    () => allProducts.filter((p) => p.category === "Daily Wear"),
+    [allProducts]
+  );
+
+  // Derive filter facets + price bounds from the live DB-driven product list.
+  const allColors = React.useMemo(
+    () =>
+      Array.from(
+        new Map(
+          dailyWear.flatMap((p) => p.colorOptions).map((c) => [c.hex, c])
+        ).values()
+      ),
+    [dailyWear]
+  );
+  const allFabrics = React.useMemo(
+    () =>
+      Array.from(
+        new Set(
+          dailyWear.map((p) => {
+            const f = p.fabric;
+            if (f.includes("matte crepe")) return "Matte Crepe";
+            if (f.includes("nida")) return "Nida";
+            if (f.includes("satin-crepe") || f.includes("satin crepe"))
+              return "Satin Crepe";
+            if (f.includes("chiffon")) return "Chiffon";
+            if (f.includes("silk")) return "Silk Blend";
+            if (f.includes("travel crepe")) return "Travel Crepe";
+            if (f.includes("heavyweight crepe")) return "Heavyweight Crepe";
+            if (f.includes("layered crepe")) return "Layered Crepe";
+            return "Other";
+          })
+        )
+      ).sort(),
+    [dailyWear]
+  );
+  const priceMin = React.useMemo(
+    () =>
+      dailyWear.length > 0
+        ? Math.min(...dailyWear.map((p) => p.price))
+        : DEFAULT_PRICE_MIN_FALLBACK,
+    [dailyWear]
+  );
+  const priceMax = React.useMemo(
+    () =>
+      dailyWear.length > 0
+        ? Math.max(...dailyWear.map((p) => p.price))
+        : DEFAULT_PRICE_MAX_FALLBACK,
+    [dailyWear]
+  );
+
+  const defaultFilters = React.useMemo<Filters>(
+    () => ({
+      priceMin,
+      priceMax,
+      sizes: [],
+      colors: [],
+      fabrics: [],
+      inStockOnly: false,
+      search: "",
+    }),
+    [priceMin, priceMax]
+  );
+
+  const [filters, setFilters] = React.useState<Filters>(defaultFilters);
   const [sort, setSort] = React.useState<SortKey>("featured");
   const [visibleCount, setVisibleCount] = React.useState(ITEMS_PER_PAGE);
   const [mobileFiltersOpen, setMobileFiltersOpen] = React.useState(false);
 
+  // Once the products load and we know the real price bounds, sync the filter
+  // default state so the price slider starts with correct min/max values.
+  React.useEffect(() => {
+    setFilters((f) => ({
+      ...f,
+      priceMin: f.priceMin === 0 || f.priceMin === EMPTY_FILTERS.priceMin ? priceMin : f.priceMin,
+      priceMax: f.priceMax === Number.MAX_SAFE_INTEGER || f.priceMax === EMPTY_FILTERS.priceMax ? priceMax : f.priceMax,
+    }));
+  }, [priceMin, priceMax]);
+
   const filtered = React.useMemo(
-    () => applyFilters(DAILY_WEAR, filters, sort),
-    [filters, sort]
+    () => applyFilters(dailyWear, filters, sort),
+    [dailyWear, filters, sort]
   );
 
   const visible = filtered.slice(0, visibleCount);
   const hasMore = visibleCount < filtered.length;
-  const activeCount = countActiveFilters(filters);
+  const activeCount = countActiveFilters(filters, priceMin, priceMax);
 
   const clearAll = () => {
-    setFilters(DEFAULT_FILTERS);
+    setFilters(defaultFilters);
     setVisibleCount(ITEMS_PER_PAGE);
   };
 
@@ -500,7 +562,7 @@ export function DailyWearCollection() {
           Everyday essentials designed to move with you, from morning to evening.
         </p>
         <p className="text-xs text-muted-foreground">
-          {DAILY_WEAR.length} pieces in the collection
+          {dailyWear.length} pieces in the collection
         </p>
         <div className="gold-rule mt-1 max-w-[3.5rem]" />
       </div>
@@ -537,7 +599,7 @@ export function DailyWearCollection() {
                 </SheetDescription>
               </SheetHeader>
               <div className="px-5 py-5">
-                <FilterPanel filters={filters} setFilters={setFilters} />
+                <FilterPanel filters={filters} setFilters={setFilters} allColors={allColors} allFabrics={allFabrics} priceMin={priceMin} priceMax={priceMax} />
                 <div className="mt-6 flex gap-2">
                   <Button
                     onClick={() => setMobileFiltersOpen(false)}
@@ -604,6 +666,9 @@ export function DailyWearCollection() {
           filters={filters}
           setFilters={setFilters}
           onClearAll={clearAll}
+          allColors={allColors}
+          priceMin={priceMin}
+          priceMax={priceMax}
         />
       </div>
 
@@ -624,13 +689,13 @@ export function DailyWearCollection() {
                 </button>
               ) : null}
             </div>
-            <FilterPanel filters={filters} setFilters={setFilters} />
+            <FilterPanel filters={filters} setFilters={setFilters} allColors={allColors} allFabrics={allFabrics} priceMin={priceMin} priceMax={priceMax} />
           </div>
         </aside>
 
         {/* Product grid */}
         <div>
-          {filtered.length === 0 ? (
+          {filtered.length === 0 && !productsLoading ? (
             // Empty state
             <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed py-20 text-center">
               <PackageX className="size-10 text-muted-foreground/40" />
@@ -643,6 +708,19 @@ export function DailyWearCollection() {
               <Button onClick={clearAll} variant="outline" className="rounded-full">
                 Clear Filters
               </Button>
+            </div>
+          ) : productsLoading && dailyWear.length === 0 ? (
+            <div className="grid grid-cols-2 gap-4 sm:gap-6 md:grid-cols-3 lg:grid-cols-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="flex flex-col overflow-hidden rounded-xl border bg-card">
+                  <div className="aspect-[4/5] w-full skeleton-shimmer" />
+                  <div className="flex flex-col gap-2 p-4">
+                    <div className="h-3 w-20 skeleton-shimmer rounded" />
+                    <div className="h-4 w-3/4 skeleton-shimmer rounded" />
+                    <div className="h-5 w-24 skeleton-shimmer rounded" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : (
             <>

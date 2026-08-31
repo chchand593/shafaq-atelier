@@ -1,19 +1,16 @@
 "use client";
 
 import * as React from "react";
-import { SlidersHorizontal, X, Check, Star } from "lucide-react";
+import { SlidersHorizontal, X, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { SectionHeader } from "@/components/site/section-header";
 import { ProductCard } from "@/components/site/product-card";
 import {
-  PRODUCTS,
   ALL_SIZES,
   type Product,
 } from "@/lib/site-data";
-import { formatPKR } from "@/lib/format";
-import { useUI, useWishlist } from "@/lib/store";
+import { useApiProducts } from "@/lib/use-products";
 
 type Category = "All" | Product["category"];
 const CATEGORIES: Category[] = ["All", "Daily Wear", "New Arrivals", "Best Sellers"];
@@ -26,13 +23,6 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: "price-desc", label: "Price: High to Low" },
   { value: "rating", label: "Top Rated" },
 ];
-
-// Build the unique colour filter list from all products.
-const ALL_COLORS = Array.from(
-  new Map(
-    PRODUCTS.flatMap((p) => p.colorOptions).map((c) => [c.hex, c])
-  ).values()
-);
 
 function ProductSkeleton() {
   return (
@@ -49,12 +39,24 @@ function ProductSkeleton() {
 }
 
 export function Collection() {
+  const { products, loading: productsLoading } = useApiProducts();
   const [category, setCategory] = React.useState<Category>("All");
   const [sort, setSort] = React.useState<SortKey>("featured");
   const [activeColors, setActiveColors] = React.useState<string[]>([]);
   const [onSaleOnly, setOnSaleOnly] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
   const [filtersOpenMobile, setFiltersOpenMobile] = React.useState(false);
+
+  // Build the unique colour filter list from the live DB-driven product list.
+  const ALL_COLORS = React.useMemo(
+    () =>
+      Array.from(
+        new Map(
+          products.flatMap((p) => p.colorOptions).map((c) => [c.hex, c])
+        ).values()
+      ),
+    [products]
+  );
 
   // simulate a brief loading state when filters change (premium feel)
   const applyFilters = React.useCallback(() => {
@@ -83,7 +85,7 @@ export function Collection() {
   };
 
   const filtered = React.useMemo(() => {
-    let list = PRODUCTS.slice();
+    let list = products.slice();
     if (category !== "All") list = list.filter((p) => p.category === category);
     if (activeColors.length > 0)
       list = list.filter((p) =>
@@ -113,7 +115,7 @@ export function Collection() {
         break;
     }
     return list;
-  }, [category, activeColors, onSaleOnly, sort]);
+  }, [products, category, activeColors, onSaleOnly, sort]);
 
   const activeFilterCount =
     (category !== "All" ? 1 : 0) +
@@ -286,7 +288,7 @@ export function Collection() {
             <div className="mb-4 text-sm text-muted-foreground lg:hidden">
               {filtered.length} {filtered.length === 1 ? "piece" : "pieces"}
             </div>
-            {filtered.length === 0 && !loading ? (
+            {filtered.length === 0 && !loading && !productsLoading ? (
               <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed py-20 text-center">
                 <span className="font-serif text-xl">No abayas match your filters</span>
                 <p className="text-sm text-muted-foreground">
@@ -298,7 +300,7 @@ export function Collection() {
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-4 sm:gap-6 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4">
-                {loading
+                {loading || (productsLoading && products.length === 0)
                   ? Array.from({ length: 8 }).map((_, i) => (
                       <ProductSkeleton key={i} />
                     ))

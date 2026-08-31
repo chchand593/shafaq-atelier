@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/admin";
 import type { ColorOption } from "@/lib/site-data";
@@ -117,6 +118,12 @@ export async function POST(request: Request) {
       active: true,
     },
   });
+
+  // Bust server-side caches so the new product shows up immediately on the
+  // storefront (homepage + product detail route + the new product's own page).
+  revalidatePath("/", "layout");
+  revalidatePath(`/product/${slug}`);
+  revalidatePath("/daily-wear");
 
   return NextResponse.json({ ok: true, product: mapProduct(product) });
 }

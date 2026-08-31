@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/admin";
 import type { ColorOption } from "@/lib/site-data";
@@ -54,6 +55,11 @@ export async function PATCH(
     data,
   });
 
+  // Bust caches so customers see the updated price/stock/visibility instantly.
+  revalidatePath("/", "layout");
+  revalidatePath(`/product/${slug}`);
+  revalidatePath("/daily-wear");
+
   return NextResponse.json({ ok: true, slug: product.slug });
 }
 
@@ -69,6 +75,13 @@ export async function DELETE(
 
   const { slug } = await params;
   await db.product.delete({ where: { slug } });
+
+  // Bust caches so the deleted product disappears from every customer-facing
+  // route (homepage sections, collection, daily-wear, product detail, search).
+  // The product detail page will now return 404 for this slug.
+  revalidatePath("/", "layout");
+  revalidatePath(`/product/${slug}`);
+  revalidatePath("/daily-wear");
 
   return NextResponse.json({ ok: true });
 }

@@ -6,7 +6,7 @@ import { GitCompare, X, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useCompare, MAX_COMPARE, useUI } from "@/lib/store";
-import { PRODUCTS } from "@/lib/site-data";
+import { useProductsByIds } from "@/lib/use-products";
 
 export function CompareBar() {
   const { ids, remove, clear } = useCompare();
@@ -14,13 +14,7 @@ export function CompareBar() {
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => setMounted(true), []);
 
-  const items = React.useMemo(
-    () =>
-      ids
-        .map((id) => PRODUCTS.find((p) => p.id === id))
-        .filter((p): p is NonNullable<typeof p> => Boolean(p)),
-    [ids]
-  );
+  const { products: items } = useProductsByIds(ids);
 
   if (!mounted || items.length === 0) return null;
 

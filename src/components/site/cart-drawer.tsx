@@ -32,8 +32,8 @@ import {
   shippingCost,
   FREE_SHIPPING_THRESHOLD,
 } from "@/lib/store";
+import { useApiProducts } from "@/lib/use-products";
 import { formatPKR } from "@/lib/format";
-import { PRODUCTS } from "@/lib/site-data";
 import { toast } from "sonner";
 
 function FreeShippingBar({ subtotal }: { subtotal: number }) {
@@ -234,6 +234,7 @@ export function CartDrawer() {
   const { lines, remove, setQty } = useCart();
   const promo = usePromo((s) => s.applied);
   const [giftCardAmount, setGiftCardAmount] = React.useState(0);
+  const { products: catalogProducts } = useApiProducts();
 
   const count = cartCount(lines);
   const subtotal = cartSubtotal(lines);
@@ -244,12 +245,14 @@ export function CartDrawer() {
   const total = Math.max(0, afterPromo + shipping - giftCardApplied);
 
   const onCheckout = () => {
-    // Validate stock for catalog products before checkout
+    // Validate stock for catalog products before checkout. We use the DB-driven
+    // product list (NOT the hardcoded PRODUCTS array) so deactivated/stock-corrected
+    // items are caught here too.
+    const catalogMap = new Map(catalogProducts.map((p) => [p.id, p]));
     for (const line of lines) {
       // Custom abayas don't have stock limits
       if (line.productId.startsWith("custom-")) continue;
-      // Check against static product data for client-side pre-validation
-      const product = PRODUCTS.find((p) => p.id === line.productId);
+      const product = catalogMap.get(line.productId);
       if (product?.stock !== undefined) {
         if (product.stock <= 0) {
           toast.error(`${line.name} is out of stock`);

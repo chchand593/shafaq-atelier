@@ -4,6 +4,19 @@ const isProduction = process.env.NODE_ENV === "production";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // Allow the Z.ai Preview iframe origin to load /_next/* dev resources and
+  // the Turbopack HMR WebSocket. Dev-only — no effect on production builds.
+  allowedDevOrigins: [
+    "*.space-z.ai",
+    // The Z.ai Preview iframe sometimes reaches the dev server via the Caddy
+    // gateway (port 81), whose forwarded Origin resolves to 127.0.0.1 or
+    // localhost. Without these entries, Next.js 16's dev server blocks
+    // /_next/* chunk requests with "Blocked cross-origin request from
+    // 127.0.0.1 to /_next/* resource", which makes the Preview iframe render
+    // blank. Dev-only — no effect on production builds.
+    "127.0.0.1",
+    "localhost",
+  ],
   // Enforce TypeScript checks during production builds.
   typescript: {
     ignoreBuildErrors: false,

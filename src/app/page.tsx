@@ -9,7 +9,6 @@ import { WhyChooseUs } from "@/components/site/why-choose-us";
 import { CustomerReviews } from "@/components/site/customer-reviews";
 import { Lookbook } from "@/components/site/lookbook";
 import { RecentlyViewed } from "@/components/site/recently-viewed";
-import { SizeGuide } from "@/components/site/size-guide";
 import { Newsletter } from "@/components/site/newsletter";
 import { Footer } from "@/components/site/footer";
 import { CartDrawer } from "@/components/site/cart-drawer";
@@ -36,7 +35,6 @@ export default function Home() {
         <CustomerReviews />
         <Lookbook />
         <RecentlyViewed />
-        <SizeGuide />
         <Newsletter />
       </main>
       <Footer />

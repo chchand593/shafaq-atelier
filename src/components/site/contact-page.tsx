@@ -463,8 +463,8 @@ function OrderSupport() {
 const FAQS = [
   {
     q: "How can I choose the right abaya size?",
-    a: "Visit our Size Guide for detailed measurements in centimetres. If you're between sizes, we recommend sizing up for a more relaxed, flowing fit.",
-    link: { label: "View Size Guide", href: "/size-guide" },
+    a: "If you're between sizes, we recommend sizing up for a more relaxed, flowing fit. For a perfectly tailored piece, try our Custom Abaya Builder — you can enter your exact measurements for a flawless fit.",
+    link: { label: "Design Your Own Abaya", href: "/customized-abayas" },
   },
   {
     q: "How long does delivery take?",
