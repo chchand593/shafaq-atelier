@@ -75,4 +75,43 @@ export const authOptions: NextAuthOptions = {
     },
   },
   secret: resolveNextAuthSecret(),
+  cookies: {
+    // The Z.ai Preview embeds the site in a cross-origin iframe
+    // (preview-chat-*.space-z.ai). Modern browsers block SameSite=Lax cookies
+    // inside cross-origin iframes, which would cause NextAuth's CSRF token
+    // cookie to never be sent back during the credentials callback — producing
+    // a misleading "Invalid email or password" / "Incorrect password" error
+    // even when the credentials are correct.
+    //
+    // Setting SameSite=None (with Secure) lets the auth cookies flow inside
+    // the Preview iframe. The site is served over HTTPS by the Z.ai gateway,
+    // so Secure cookies are valid. This does not weaken security for the
+    // direct (same-origin) customer/admin experience.
+    sessionToken: {
+      name: "next-auth.session-token",
+      options: {
+        httpOnly: true,
+        sameSite: "none",
+        path: "/",
+        secure: true,
+      },
+    },
+    callbackUrl: {
+      name: "next-auth.callback-url",
+      options: {
+        sameSite: "none",
+        path: "/",
+        secure: true,
+      },
+    },
+    csrfToken: {
+      name: "next-auth.csrf-token",
+      options: {
+        httpOnly: true,
+        sameSite: "none",
+        path: "/",
+        secure: true,
+      },
+    },
+  },
 };

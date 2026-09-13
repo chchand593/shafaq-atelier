@@ -32,6 +32,8 @@ model Product {
   price         Int
   originalPrice Int?
   image         String
+  images        String   @default("[]") // JSON array of image URLs (multiple images; image field is primary/first)
+  colorImages   String   @default("[]") // JSON array of {colorHex, colorName, image} — real photos per color
   colors        String   // JSON array of {hex,name}
   sizes         String   // JSON array of strings
   rating        Float    @default(4.8)
@@ -39,6 +41,9 @@ model Product {
   stock         Int      @default(50)
   lowStockThreshold Int  @default(5)
   active        Boolean  @default(true) // admin can hide from storefront
+  isNewArrival  Boolean  @default(false) // admin can feature in New Arrivals section
+  isBestSeller  Boolean  @default(false) // admin can feature in Best Sellers section
+  isFeatured    Boolean  @default(false) // admin can feature in Daily Wear / featured section
   badge         String?
   fabric        String
   care          String
@@ -184,5 +189,95 @@ model StoreSettings {
   bankAccountTitle    String   @default("ShafaQ Atelier")
   manualTransferEnabled Boolean @default(true)
   codEnabled          Boolean  @default(true)
+  // Customized Abaya base price — admin can change at any time; customer-side
+  // price calculation uses this as the starting point before fabric/add-on prices.
+  customAbayaBasePrice Int     @default(15000)
   updatedAt           DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Dynamic catalog configuration models (admin-managed, no code changes needed)
+// ---------------------------------------------------------------------------
+
+// Color palette — supports 100+ colors. Used by both regular products (via the
+// colors JSON on Product) and the Customized Abaya builder. Admin can add/edit/
+// deactivate colors. Inactive colors are hidden from customers.
+model Color {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  hex       String   // HEX color code, e.g. "#1a1a1a"
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Fabric / Stuff for the Customized Abaya builder. Each fabric has an additional
+// price that is added to the base price. themeValue is a HEX color used for
+// subtle visual theming on the customer-side builder when the fabric is selected.
+model Fabric {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  description     String   @default("")
+  additionalPrice Int      @default(0) // added to base price
+  themeValue      String   @default("") // HEX for subtle fabric theme accent
+  active          Boolean  @default(true)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// Customization options / add-ons for the Customized Abaya builder. Admin can
+// create any add-on (sleeves, hijab, embroidery, details, etc.) with a price.
+// optionType groups add-ons in the UI (e.g. "sleeves", "hijab", "embroidery").
+model CustomizationOption {
+  id              String   @id @default(cuid())
+  name            String
+  description     String   @default("")
+  optionType      String   @default("addon") // sleeves | hijab | embroidery | details | style | addon
+  additionalPrice Int      @default(0)
+  active          Boolean  @default(true)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([optionType])
+}
+
+// Abaya Style — represents a customizable abaya silhouette (e.g. "Classic Open
+// Abaya", "Kimono / Flared"). Each style has multiple preview images (front,
+// back, left, right, detail) managed by admin. When a customer selects a style
+// in the Customized Abaya builder, the preview gallery shows these images.
+model AbayaStyle {
+  id          String        @id @default(cuid())
+  name        String        @unique
+  slug        String        @unique
+  description String        @default("")
+  active      Boolean       @default(true)
+  sortOrder   Int           @default(0)
+  images      AbayaImage[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+// Abaya Image — a single preview image for an AbayaStyle. Supports multiple
+// angles (front, back, left, right, detail). Optional colorHex links an image
+// to a specific color so the preview changes when the customer selects that
+// color. isPrimary marks the default/hero image. sortOrder controls display
+// order in the thumbnail strip.
+model AbayaImage {
+  id           String      @id @default(cuid())
+  abayaStyleId String
+  abayaStyle   AbayaStyle  @relation(fields: [abayaStyleId], references: [id], onDelete: Cascade)
+  url          String
+  angle        String      @default("front") // front | back | left | right | detail
+  label        String      @default("") // optional display label, e.g. "Front View"
+  isPrimary    Boolean     @default(false)
+  colorHex     String?     // optional: if set, this image is shown when the customer selects this color
+  sortOrder    Int         @default(0)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([abayaStyleId])
+  @@index([colorHex])
 }

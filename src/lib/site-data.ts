@@ -28,6 +28,21 @@ export type ColorOption = {
   name: string;
 };
 
+// Color-specific product image mapping. When a customer selects a color,
+// the product image changes to the real photo for that color (if admin has
+// uploaded one). Falls back to the main product image when absent.
+//
+// Supports MULTIPLE images per color (a color-specific gallery). The `image`
+// field is the primary/hero image for that color. The `images` array (optional)
+// contains additional gallery images for that color. When `images` is present,
+// the customer gallery shows all of them; when absent, only `image` is shown.
+export type ColorImage = {
+  colorHex: string;
+  colorName: string;
+  image: string;           // primary image for this color (backward compatible)
+  images?: string[];       // additional gallery images for this color (optional)
+};
+
 export type Product = {
   id: string;
   name: string;
@@ -35,6 +50,8 @@ export type Product = {
   price: number;
   originalPrice?: number;
   image: string;
+  images?: string[];
+  colorImages?: ColorImage[];
   colors: string[];
   colorOptions: ColorOption[];
   sizes: string[];
@@ -45,6 +62,9 @@ export type Product = {
   fabric: string;
   care: string;
   description: string;
+  isNewArrival?: boolean;
+  isBestSeller?: boolean;
+  isFeatured?: boolean;
 };
 
 export const ALL_SIZES = ["XS", "S", "M", "L", "XL", "XXL"];
@@ -61,7 +81,7 @@ export const PRODUCTS: Product[] = [
     name: "Noor Everyday Abaya",
     category: "Daily Wear",
     price: 7400,
-    image: "/images/daily-1.jpg",
+    image: "/images/products/noor-charcoal-front.webp",
     colors: ["#1a1a1a", "#6b5246", "#d8c7a8"],
     colorOptions: colors([
       { hex: "#1a1a1a", name: "Black" },
@@ -202,7 +222,7 @@ export const PRODUCTS: Product[] = [
     name: "Yasmin Open-Front Abaya",
     category: "Best Sellers",
     price: 13400,
-    image: "/images/best-2.jpg",
+    image: "/images/products/yasmin-floral-front.webp",
     colors: ["#1a1a1a", "#e8dcc4", "#c9a24b"],
     colorOptions: colors([
       { hex: "#1a1a1a", name: "Black" },

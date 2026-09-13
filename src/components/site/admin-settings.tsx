@@ -36,6 +36,7 @@ type SettingsData = {
   shippingCharge: number;
   freeShippingThreshold: number;
   lowStockThreshold: number;
+  customAbayaBasePrice: number;
   storeOpen: boolean;
   announcement: string;
   // Manual transfer payment settings
@@ -56,6 +57,7 @@ const DEFAULTS: SettingsData = {
   shippingCharge: 350,
   freeShippingThreshold: 10000,
   lowStockThreshold: 5,
+  customAbayaBasePrice: 15000,
   storeOpen: true,
   announcement: "",
   jazzCashNumber: "03256912201",
@@ -250,6 +252,18 @@ export function AdminSettings() {
                 max={10000}
               />
             </FieldShell>
+            <FieldShell label="Custom Abaya Base Price (PKR)">
+              <Input
+                type="number"
+                value={form.customAbayaBasePrice}
+                onChange={(e) => setField("customAbayaBasePrice", Math.max(0, Number(e.target.value) || 0))}
+                min={0}
+                max={10000000}
+              />
+              <p className="mt-1 text-[0.65rem] text-muted-foreground">
+                Starting price for the Customized Abaya builder before fabric and add-on prices.
+              </p>
+            </FieldShell>
             <div className="flex items-center justify-between rounded-lg border px-3 py-2">
               <div>
                 <p className="text-xs font-medium">Store Status</p>
@@ -288,8 +302,18 @@ export function AdminSettings() {
           value={formatPKR(form.freeShippingThreshold)}
         />
         <SummaryCard
+          label="Custom Abaya Base"
+          value={formatPKR(form.customAbayaBasePrice)}
+        />
+      </div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <SummaryCard
           label="Low Stock Threshold"
           value={`${form.lowStockThreshold} units`}
+        />
+        <SummaryCard
+          label="Store Status"
+          value={form.storeOpen ? "Open for orders" : "Closed"}
         />
       </div>
 

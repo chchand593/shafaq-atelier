@@ -22,6 +22,7 @@ export type StoreSettings = {
   bankAccountTitle: string;
   manualTransferEnabled: boolean;
   codEnabled: boolean;
+  customAbayaBasePrice: number;
   updatedAt: Date;
 };
 
@@ -42,6 +43,7 @@ const DEFAULT_SETTINGS = {
   bankAccountTitle: "ShafaQ Atelier",
   manualTransferEnabled: true,
   codEnabled: true,
+  customAbayaBasePrice: 15000,
 };
 
 // getStoreSettings always returns a valid settings object. If the row does not
@@ -78,6 +80,7 @@ export async function getPublicStoreSettings() {
     // Public payment method availability + manual transfer instructions
     codEnabled: s.codEnabled,
     manualTransferEnabled: s.manualTransferEnabled,
+    customAbayaBasePrice: s.customAbayaBasePrice,
     jazzCashNumber: s.jazzCashNumber,
     bankName: s.bankName,
     bankAccountNumber: s.bankAccountNumber,

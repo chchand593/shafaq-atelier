@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { db } from "@/lib/db";
-import type { ColorOption, Product } from "@/lib/site-data";
+import type { ColorImage, ColorOption, Product } from "@/lib/site-data";
 import { ProductDetail } from "@/components/site/product-detail";
 import { SiteChrome } from "@/components/site/site-chrome";
 
@@ -23,6 +23,7 @@ async function getProduct(slug: string) {
     image: r.image,
     colors: (JSON.parse(r.colors) as ColorOption[]).map((c) => c.hex),
     colorOptions: JSON.parse(r.colors) as ColorOption[],
+    colorImages: JSON.parse(r.colorImages || "[]") as ColorImage[],
     sizes: JSON.parse(r.sizes) as string[],
     rating: r.rating,
     reviews: r.reviewCount,
@@ -31,6 +32,9 @@ async function getProduct(slug: string) {
     fabric: r.fabric,
     care: r.care,
     description: r.description,
+    isNewArrival: r.isNewArrival,
+    isBestSeller: r.isBestSeller,
+    isFeatured: r.isFeatured,
   });
   return {
     product: mapProduct(row),

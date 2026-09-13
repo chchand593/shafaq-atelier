@@ -1,12 +1,15 @@
 "use client";
 
 import * as React from "react";
-import { Plus, Search, Trash2, Pencil, X, Check, Loader2, AlertTriangle, Package, Power } from "lucide-react";
+import { Plus, Search, Trash2, Pencil, Loader2, AlertTriangle, Package, Power, Image as ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { formatPKR } from "@/lib/format";
 import { ProductCreateModal } from "@/components/site/product-create-modal";
+import { AdminColorImagesModal } from "@/components/site/admin-color-images-modal";
+import { AdminProductEditModal } from "@/components/site/admin-product-edit-modal";
+import type { ColorImage, ColorOption } from "@/lib/site-data";
 import { toast } from "sonner";
 
 type AdminProduct = {
@@ -22,6 +25,10 @@ type AdminProduct = {
   rating: number;
   badge?: string;
   image: string;
+  // Optional — returned by /api/admin/products but not displayed in the
+  // table. Used by the Color Images modal to know which colors exist.
+  colorOptions?: ColorOption[];
+  colorImages?: ColorImage[];
 };
 
 const ACTIVE_FILTERS = ["all", "active", "inactive"] as const;
@@ -34,11 +41,11 @@ export function AdminProducts() {
   const [stockFilter, setStockFilter] = React.useState("all");
   const [activeFilter, setActiveFilter] = React.useState<(typeof ACTIVE_FILTERS)[number]>("all");
   const [createOpen, setCreateOpen] = React.useState(false);
-  const [editingId, setEditingId] = React.useState<string | null>(null);
-  const [editForm, setEditForm] = React.useState<Partial<AdminProduct>>({});
+  const [editProduct, setEditProduct] = React.useState<AdminProduct | null>(null);
   const [deleteConfirm, setDeleteConfirm] = React.useState<string | null>(null);
   const [toggleConfirm, setToggleConfirm] = React.useState<{ slug: string; name: string; toActive: boolean } | null>(null);
   const [togglingSlug, setTogglingSlug] = React.useState<string | null>(null);
+  const [colorImagesProduct, setColorImagesProduct] = React.useState<AdminProduct | null>(null);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -65,34 +72,6 @@ export function AdminProducts() {
     if (activeFilter === "inactive" && p.active) return false;
     return true;
   });
-
-  const startEdit = (p: AdminProduct) => {
-    setEditingId(p.id);
-    setEditForm({ price: p.price, originalPrice: p.originalPrice ?? 0, stock: p.stock, lowStockThreshold: p.lowStockThreshold, badge: p.badge ?? "" });
-  };
-
-  const saveEdit = async () => {
-    if (!editingId) return;
-    try {
-      const res = await fetch(`/api/admin/products/${editingId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          price: Number(editForm.price) || 0,
-          originalPrice: editForm.originalPrice ? Number(editForm.originalPrice) : null,
-          stock: Number(editForm.stock) || 0,
-          lowStockThreshold: Number(editForm.lowStockThreshold) || 5,
-          badge: editForm.badge || null,
-        }),
-      });
-      if (!res.ok) throw new Error();
-      toast.success("Product updated", { description: editingId });
-      setEditingId(null);
-      void load();
-    } catch {
-      toast.error("Failed to update product");
-    }
-  };
 
   const confirmToggle = (p: AdminProduct) => {
     setToggleConfirm({ slug: p.id, name: p.name, toActive: !p.active });
@@ -261,7 +240,6 @@ export function AdminProducts() {
             <tbody className="divide-y">
               {filtered.map((p) => {
                 const ss = stockStatus(p);
-                const isEditing = editingId === p.id;
                 const isToggling = togglingSlug === p.id;
                 return (
                   <tr key={p.id} className={cn("hover:bg-secondary/20", !p.active && "opacity-60")}>
@@ -274,42 +252,9 @@ export function AdminProducts() {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{p.category}</td>
-                    <td className="px-4 py-3 text-right">
-                      {isEditing ? (
-                        <Input
-                          type="number"
-                          value={editForm.price ?? 0}
-                          onChange={(e) => setEditForm({ ...editForm, price: Number(e.target.value) })}
-                          className="h-8 w-24 text-right text-xs"
-                        />
-                      ) : (
-                        formatPKR(p.price)
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {isEditing ? (
-                        <Input
-                          type="number"
-                          value={editForm.stock ?? 0}
-                          onChange={(e) => setEditForm({ ...editForm, stock: Number(e.target.value) })}
-                          className="h-8 w-20 text-right text-xs"
-                        />
-                      ) : (
-                        p.stock
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {isEditing ? (
-                        <Input
-                          type="number"
-                          value={editForm.lowStockThreshold ?? 5}
-                          onChange={(e) => setEditForm({ ...editForm, lowStockThreshold: Number(e.target.value) })}
-                          className="h-8 w-20 text-right text-xs"
-                        />
-                      ) : (
-                        p.lowStockThreshold
-                      )}
-                    </td>
+                    <td className="px-4 py-3 text-right">{formatPKR(p.price)}</td>
+                    <td className="px-4 py-3 text-right">{p.stock}</td>
+                    <td className="px-4 py-3 text-right">{p.lowStockThreshold}</td>
                     <td className="px-4 py-3">
                       <span className={cn("rounded-full px-2 py-0.5 text-[0.65rem] font-medium", ss.class)}>
                         {ss.label}
@@ -319,7 +264,7 @@ export function AdminProducts() {
                       <button
                         type="button"
                         onClick={() => quickToggle(p)}
-                        disabled={isToggling || isEditing}
+                        disabled={isToggling}
                         className={cn(
                           "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[0.65rem] font-medium transition-all disabled:opacity-50",
                           p.active
@@ -334,54 +279,42 @@ export function AdminProducts() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
-                        {isEditing ? (
-                          <>
-                            <button
-                              type="button"
-                              onClick={saveEdit}
-                              className="inline-flex size-8 items-center justify-center rounded-md text-green-600 hover:bg-green-500/10"
-                              aria-label="Save"
-                            >
-                              <Check className="size-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setEditingId(null)}
-                              className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary"
-                              aria-label="Cancel"
-                            >
-                              <X className="size-4" />
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => startEdit(p)}
-                              className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
-                              aria-label="Edit"
-                            >
-                              <Pencil className="size-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => confirmToggle(p)}
-                              className="inline-flex size-8 items-center justify-center rounded-md text-[var(--gold)] hover:bg-[var(--gold)]/10"
-                              aria-label="Toggle active"
-                              title={p.active ? "Deactivate product" : "Activate product"}
-                            >
-                              <Power className="size-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setDeleteConfirm(p.id)}
-                              className="inline-flex size-8 items-center justify-center rounded-md text-destructive hover:bg-destructive/10"
-                              aria-label="Delete"
-                            >
-                              <Trash2 className="size-4" />
-                            </button>
-                          </>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => setEditProduct(p)}
+                          className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
+                          aria-label="Edit product"
+                          title="Edit product"
+                        >
+                          <Pencil className="size-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => confirmToggle(p)}
+                          className="inline-flex size-8 items-center justify-center rounded-md text-[var(--gold)] hover:bg-[var(--gold)]/10"
+                          aria-label="Toggle active"
+                          title={p.active ? "Deactivate product" : "Activate product"}
+                        >
+                          <Power className="size-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setColorImagesProduct(p)}
+                          className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
+                          aria-label="Manage color images"
+                          title="Manage color images"
+                          disabled={(p.colorOptions?.length ?? 0) === 0}
+                        >
+                          <ImageIcon className="size-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteConfirm(p.id)}
+                          className="inline-flex size-8 items-center justify-center rounded-md text-destructive hover:bg-destructive/10"
+                          aria-label="Delete"
+                        >
+                          <Trash2 className="size-4" />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -466,6 +399,30 @@ export function AdminProducts() {
           </div>
         </div>
       ) : null}
+
+      {/* Color images modal */}
+      {colorImagesProduct ? (
+        <AdminColorImagesModal
+          open={colorImagesProduct !== null}
+          onOpenChange={(o) => {
+            if (!o) setColorImagesProduct(null);
+          }}
+          productSlug={colorImagesProduct.id}
+          productName={colorImagesProduct.name}
+          colorOptions={colorImagesProduct.colorOptions ?? []}
+          onSaved={() => void load()}
+        />
+      ) : null}
+
+      {/* Edit modal */}
+      <AdminProductEditModal
+        open={editProduct !== null}
+        onOpenChange={(o) => {
+          if (!o) setEditProduct(null);
+        }}
+        product={editProduct}
+        onSaved={() => void load()}
+      />
 
       {/* Create modal */}
       <ProductCreateModal

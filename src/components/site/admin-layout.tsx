@@ -15,6 +15,10 @@ import {
   Menu,
   X,
   Settings,
+  Palette,
+  Shirt,
+  Sparkles,
+  Images,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -25,6 +29,10 @@ const NAV_ITEMS = [
   { href: "/admin/orders", label: "Orders", icon: ShoppingCart },
   { href: "/admin/customers", label: "Customers", icon: Users },
   { href: "/admin/reviews", label: "Reviews", icon: Star },
+  { href: "/admin/colors", label: "Colors", icon: Palette },
+  { href: "/admin/fabrics", label: "Fabrics", icon: Shirt },
+  { href: "/admin/customization", label: "Add-ons", icon: Sparkles },
+  { href: "/admin/abaya-images", label: "Abaya Images", icon: Images },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
 

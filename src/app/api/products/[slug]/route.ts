@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import type { ColorOption } from "@/lib/site-data";
+import type { ColorImage, ColorOption } from "@/lib/site-data";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +32,8 @@ export async function GET(
     price: row.price,
     originalPrice: row.originalPrice ?? undefined,
     image: row.image,
+    images: JSON.parse(row.images || "[]") as string[],
+    colorImages: JSON.parse(row.colorImages || "[]") as ColorImage[],
     colors: (JSON.parse(row.colors) as ColorOption[]).map((c) => c.hex),
     colorOptions: JSON.parse(row.colors) as ColorOption[],
     sizes: JSON.parse(row.sizes) as string[],
@@ -42,6 +44,9 @@ export async function GET(
     fabric: row.fabric,
     care: row.care,
     description: row.description,
+    isNewArrival: row.isNewArrival,
+    isBestSeller: row.isBestSeller,
+    isFeatured: row.isFeatured,
   });
 
   return NextResponse.json({

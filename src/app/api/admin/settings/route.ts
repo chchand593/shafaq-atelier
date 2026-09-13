@@ -35,6 +35,7 @@ export async function GET() {
       bankAccountTitle: s.bankAccountTitle,
       manualTransferEnabled: s.manualTransferEnabled,
       codEnabled: s.codEnabled,
+      customAbayaBasePrice: s.customAbayaBasePrice,
     },
   });
 }
@@ -65,6 +66,7 @@ export async function PATCH(request: Request) {
     bankAccountTitle: string;
     manualTransferEnabled: boolean;
     codEnabled: boolean;
+    customAbayaBasePrice: number;
   }>;
 
   const clean: Record<string, unknown> = {};
@@ -173,6 +175,13 @@ export async function PATCH(request: Request) {
     clean.codEnabled = Boolean(body.codEnabled);
   }
 
+  if (body.customAbayaBasePrice !== undefined) {
+    const n = Math.round(Number(body.customAbayaBasePrice));
+    if (!Number.isFinite(n) || n < 0) return NextResponse.json({ error: "Custom abaya base price must be a non-negative number." }, { status: 400 });
+    if (n > 10000000) return NextResponse.json({ error: "Custom abaya base price too high." }, { status: 400 });
+    clean.customAbayaBasePrice = n;
+  }
+
   // Sanity: at least one payment method must remain available so customers can
   // actually place orders. COD OR manual transfer OR automatic JazzCash (env)
   // — at least one of the three.
@@ -213,6 +222,7 @@ export async function PATCH(request: Request) {
       bankAccountTitle: updated.bankAccountTitle,
       manualTransferEnabled: updated.manualTransferEnabled,
       codEnabled: updated.codEnabled,
+      customAbayaBasePrice: updated.customAbayaBasePrice,
     },
   });
 }

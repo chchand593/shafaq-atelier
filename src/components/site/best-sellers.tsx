@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ArrowRight, Gift } from "lucide-react";
+import { ArrowRight, Gift, Award } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ProductCard } from "@/components/site/product-card";
 import { SectionHeader } from "@/components/site/section-header";
@@ -22,10 +22,24 @@ function CardSkeleton() {
   );
 }
 
+function EmptyState() {
+  return (
+    <div className="col-span-2 flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed py-16 text-center lg:col-span-4">
+      <span className="flex size-12 items-center justify-center rounded-full bg-secondary text-[var(--gold)]">
+        <Award className="size-5" />
+      </span>
+      <p className="font-serif text-lg">Coming soon</p>
+      <p className="text-sm text-muted-foreground">
+        Our best sellers are being restocked. Check back shortly.
+      </p>
+    </div>
+  );
+}
+
 export function BestSellers() {
   const { products, loading } = useApiProducts();
   const list = React.useMemo(
-    () => products.filter((p) => p.category === "Best Sellers"),
+    () => products.filter((p) => p.isBestSeller === true),
     [products]
   );
   const { setGiftCardOpen } = useUI();
@@ -43,9 +57,11 @@ export function BestSellers() {
         <div className="mt-12 grid grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-4">
           {loading && list.length === 0
             ? Array.from({ length: 4 }).map((_, i) => <CardSkeleton key={i} />)
-            : list.map((product) => (
-                <ProductCard key={product.id} product={product} />
-              ))}
+            : list.length === 0
+              ? <EmptyState />
+              : list.map((product) => (
+                  <ProductCard key={product.id} product={product} />
+                ))}
 
           {/* Editorial promo tile — Gift Card */}
           <div className="col-span-2 flex flex-col justify-between overflow-hidden rounded-xl border bg-gradient-to-br from-secondary to-secondary/60 p-6 sm:p-8 lg:col-span-2">

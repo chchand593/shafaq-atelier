@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Search, X, ArrowRight, Loader2 } from "lucide-react";
+import { Search, X, ArrowRight, Loader2, Check } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -16,16 +16,50 @@ import type { Product } from "@/lib/site-data";
 
 const POPULAR = ["Black abaya", "Everyday", "Gold trim", "Bespoke", "Bell sleeve"];
 
+// Shape returned by /api/colors (active only).
+type ApiColor = {
+  id: string;
+  name: string;
+  hex: string;
+  sortOrder: number;
+};
+
 export function SearchOverlay() {
   const { searchOpen, setSearchOpen } = useUI();
   const [query, setQuery] = React.useState("");
   const [results, setResults] = React.useState<Product[]>([]);
   const [loading, setLoading] = React.useState(false);
 
-  // Debounced server-side search
+  // Color filter state.
+  const [colors, setColors] = React.useState<ApiColor[]>([]);
+  const [selectedColor, setSelectedColor] = React.useState<ApiColor | null>(null);
+
+  // Fetch the color palette once on mount so the filter row is populated.
+  React.useEffect(() => {
+    let mounted = true;
+    fetch("/api/colors")
+      .then(async (r) => {
+        if (!r.ok) return [];
+        const data = (await r.json()) as { colors?: ApiColor[] };
+        return data.colors ?? [];
+      })
+      .then((list) => {
+        if (mounted) setColors(list);
+      })
+      .catch(() => {
+        /* non-fatal — color filter just won't appear */
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // Debounced server-side search — filtered by both text query AND the
+  // optionally selected color. The color is sent as `&color=HEX` so the
+  // backend can AND it with the text tokens.
   React.useEffect(() => {
     const q = query.trim();
-    if (!q) {
+    if (!q && !selectedColor) {
       setResults([]);
       setLoading(false);
       return;
@@ -33,7 +67,10 @@ export function SearchOverlay() {
     setLoading(true);
     const t = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+        const params = new URLSearchParams();
+        if (q) params.set("q", q);
+        if (selectedColor) params.set("color", selectedColor.hex);
+        const res = await fetch(`/api/search?${params.toString()}`);
         if (!res.ok) return;
         const data = (await res.json()) as { products: Product[] };
         setResults(data.products);
@@ -42,19 +79,22 @@ export function SearchOverlay() {
       }
     }, 250);
     return () => clearTimeout(t);
-  }, [query]);
+  }, [query, selectedColor]);
 
   React.useEffect(() => {
     if (!searchOpen) {
       const t = setTimeout(() => {
         setQuery("");
         setResults([]);
+        setSelectedColor(null);
       }, 250);
       return () => clearTimeout(t);
     }
   }, [searchOpen]);
 
   const closeAndGo = () => setSearchOpen(false);
+
+  const hasActiveFilter = query.trim() !== "" || selectedColor !== null;
 
   return (
     <Dialog open={searchOpen} onOpenChange={setSearchOpen}>
@@ -91,9 +131,69 @@ export function SearchOverlay() {
           </button>
         </div>
 
+        {/* Color filter row */}
+        {colors.length > 0 ? (
+          <div className="border-b bg-secondary/30 px-4 py-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="eyebrow text-[var(--mocha)]">
+                Filter by colour
+              </span>
+              {selectedColor ? (
+                <button
+                  type="button"
+                  onClick={() => setSelectedColor(null)}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
+                >
+                  <span
+                    className="size-3 rounded-full ring-1 ring-inset ring-black/10"
+                    style={{ backgroundColor: selectedColor.hex }}
+                  />
+                  {selectedColor.name}
+                  <X className="size-3" />
+                </button>
+              ) : null}
+            </div>
+            <div className="mt-2 flex max-h-16 flex-wrap gap-1.5 overflow-y-auto elegant-scroll">
+              {colors.map((c) => {
+                const selected = selectedColor?.id === c.id;
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() =>
+                      setSelectedColor(selected ? null : c)
+                    }
+                    aria-pressed={selected}
+                    aria-label={selected ? `Remove ${c.name} filter` : `Filter by ${c.name}`}
+                    title={c.name}
+                    className={cn(
+                      "group relative flex items-center gap-1.5 rounded-full border px-2 py-1 text-xs transition-all",
+                      selected
+                        ? "border-foreground/40 bg-foreground/5 text-foreground"
+                        : "border-border bg-background text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+                    )}
+                  >
+                    <span
+                      className="relative size-3.5 rounded-full ring-1 ring-inset ring-black/10"
+                      style={{ backgroundColor: c.hex }}
+                    >
+                      {selected ? (
+                        <span className="absolute inset-0 flex items-center justify-center">
+                          <Check className="size-2.5 text-white drop-shadow" />
+                        </span>
+                      ) : null}
+                    </span>
+                    {c.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
         {/* Body */}
         <div className="max-h-[60vh] overflow-y-auto elegant-scroll p-4">
-          {query.trim() === "" ? (
+          {!hasActiveFilter ? (
             <div>
               <p className="eyebrow text-[var(--mocha)]">Popular searches</p>
               <div className="mt-3 flex flex-wrap gap-2">
@@ -108,12 +208,21 @@ export function SearchOverlay() {
                   </button>
                 ))}
               </div>
+              {colors.length > 0 ? (
+                <p className="mt-5 text-xs text-muted-foreground">
+                  Tip — pick a colour above to browse every abaya available in
+                  that shade, with or without a search term.
+                </p>
+              ) : null}
             </div>
           ) : !loading && results.length === 0 ? (
             <div className="py-10 text-center">
-              <p className="font-serif text-lg">No results for “{query}”</p>
+              <p className="font-serif text-lg">
+                No results{selectedColor ? ` in ${selectedColor.name}` : ""}
+                {query.trim() ? ` for “{query.trim()}”` : ""}
+              </p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Try a different keyword, or browse our collections below.
+                Try a different keyword or colour, or browse our collections below.
               </p>
               <div className="mt-4 flex flex-wrap justify-center gap-2">
                 {POPULAR.map((p) => (
@@ -131,7 +240,9 @@ export function SearchOverlay() {
           ) : (
             <div>
               <p className="eyebrow text-[var(--mocha)]">
-                {loading ? "Searching…" : `${results.length} result${results.length > 1 ? "s" : ""}`}
+                {loading
+                  ? "Searching…"
+                  : `${results.length} result${results.length > 1 ? "s" : ""}${selectedColor ? ` · ${selectedColor.name}` : ""}`}
               </p>
               <ul className="mt-3 divide-y">
                 {results.map((p) => (
@@ -143,7 +254,7 @@ export function SearchOverlay() {
                     >
                       <div className="size-14 flex-none overflow-hidden rounded-md bg-secondary">
                         <img
-                          src={p.image}
+                          src={p.images?.[0] || p.image}
                           alt={p.name}
                           className="h-full w-full object-cover"
                         />

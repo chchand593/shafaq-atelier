@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/admin";
-import type { ColorOption } from "@/lib/site-data";
+import type { ColorImage, ColorOption } from "@/lib/site-data";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +14,8 @@ function mapProduct(p: {
   price: number;
   originalPrice: number | null;
   image: string;
+  images: string;
+  colorImages: string;
   colors: string;
   sizes: string;
   rating: number;
@@ -26,6 +28,9 @@ function mapProduct(p: {
   care: string;
   description: string;
   createdAt: Date;
+  isNewArrival: boolean;
+  isBestSeller: boolean;
+  isFeatured: boolean;
 }) {
   return {
     id: p.slug,
@@ -34,6 +39,8 @@ function mapProduct(p: {
     price: p.price,
     originalPrice: p.originalPrice ?? undefined,
     image: p.image,
+    images: JSON.parse(p.images || "[]") as string[],
+    colorImages: JSON.parse(p.colorImages || "[]") as ColorImage[],
     colorOptions: JSON.parse(p.colors) as ColorOption[],
     sizes: JSON.parse(p.sizes) as string[],
     rating: p.rating,
@@ -46,6 +53,9 @@ function mapProduct(p: {
     care: p.care,
     description: p.description,
     createdAt: p.createdAt,
+    isNewArrival: p.isNewArrival,
+    isBestSeller: p.isBestSeller,
+    isFeatured: p.isFeatured,
   };
 }
 
@@ -77,6 +87,8 @@ export async function POST(request: Request) {
     price: number;
     originalPrice?: number;
     image: string;
+    images?: string[];
+    colorImages?: ColorImage[];
     colorOptions: ColorOption[];
     sizes: string[];
     badge?: string;
@@ -84,6 +96,9 @@ export async function POST(request: Request) {
     care: string;
     description: string;
     stock?: number;
+    isNewArrival?: boolean;
+    isBestSeller?: boolean;
+    isFeatured?: boolean;
   };
 
   if (!body.name || !body.category || !body.price || !body.image) {
@@ -108,6 +123,8 @@ export async function POST(request: Request) {
       price: body.price,
       originalPrice: body.originalPrice ?? null,
       image: body.image,
+      images: JSON.stringify(body.images || []),
+      colorImages: JSON.stringify(body.colorImages || []),
       colors: JSON.stringify(body.colorOptions || []),
       sizes: JSON.stringify(body.sizes || ["XS", "S", "M", "L", "XL", "XXL"]),
       badge: body.badge || null,
@@ -116,6 +133,9 @@ export async function POST(request: Request) {
       description: body.description || "",
       stock: body.stock ?? 50,
       active: true,
+      isNewArrival: body.isNewArrival ?? false,
+      isBestSeller: body.isBestSeller ?? false,
+      isFeatured: body.isFeatured ?? false,
     },
   });
 

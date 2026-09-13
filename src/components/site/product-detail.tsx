@@ -30,6 +30,7 @@ import { useUI, useCart, useWishlist, useRecentlyViewed } from "@/lib/store";
 import { formatPKR } from "@/lib/format";
 import { toast } from "sonner";
 import type { Product } from "@/lib/site-data";
+import { getColorGallery } from "@/components/site/product-card";
 import { ProductCard } from "@/components/site/product-card";
 import { ProductReviews } from "@/components/site/product-reviews";
 import { Recommendations } from "@/components/site/recommendations";
@@ -40,6 +41,41 @@ const FRAMINGS = [
   { label: "Detail", pos: "top" as const, zoom: 1.5 },
   { label: "Hem", pos: "bottom" as const, zoom: 1.5 },
 ];
+
+// Build the list of gallery "views" for a product. When the product ships a
+// multi-image `images` array we use those directly (each its own photo). When
+// it only has a single `image` we fall back to the framing variants of that
+// one image so the existing lookbook feel is preserved.
+type GalleryView = { src: string; label: string; pos: string; zoom: number };
+
+function buildGallery(product: Product, colorHex?: string | null): { views: GalleryView[]; isMulti: boolean } {
+  // Get all images for the selected color (or the product's default gallery)
+  const colorGallery = getColorGallery(product, colorHex ?? null);
+
+  if (colorGallery.length > 1) {
+    return {
+      isMulti: true,
+      views: colorGallery.map((src, i) => ({
+        src,
+        label: `View ${i + 1}`,
+        pos: "center",
+        zoom: 1,
+      })),
+    };
+  }
+
+  // Single image — use FRAMINGS of that image for the lookbook feel.
+  const src = colorGallery[0] || product.image;
+  return {
+    isMulti: false,
+    views: FRAMINGS.map((f) => ({
+      src,
+      label: f.label,
+      pos: f.pos,
+      zoom: f.zoom,
+    })),
+  };
+}
 
 function Stars({ rating }: { rating: number }) {
   return (
@@ -98,6 +134,15 @@ export function ProductDetail({
   const [qty, setQty] = React.useState(1);
   const [framing, setFraming] = React.useState(0);
 
+  // Build the gallery views for this product (multi-image if available,
+  // otherwise framing variants of the single image).
+  // Build gallery — color-aware so selecting a color shows the real photo.
+  const gallery = React.useMemo(
+    () => buildGallery(product, activeColor?.hex),
+    [product, activeColor?.hex]
+  );
+  const views = gallery.views;
+
   React.useEffect(() => {
     setActiveColor(product.colorOptions[0] ?? { hex: "#1a1a1a", name: "Default" });
     setActiveSize(null);
@@ -124,11 +169,22 @@ export function ProductDetail({
       });
       return;
     }
+    // Use the color-specific image (real photo for the selected color) in the
+    // cart. Falls back to the main product image if no color image exists.
+    const cartImage = (() => {
+      if (product.colorImages && product.colorImages.length > 0) {
+        const match = product.colorImages.find(
+          (ci) => ci.colorHex.toLowerCase() === activeColor.hex.toLowerCase()
+        );
+        if (match) return match.image;
+      }
+      return product.images?.[0] || product.image;
+    })();
     addToCart({
       productId: product.id,
       name: product.name,
       price: product.price,
-      image: product.image,
+      image: cartImage,
       color: activeColor.hex,
       colorName: activeColor.name,
       size: activeSize,
@@ -155,9 +211,9 @@ export function ProductDetail({
   };
 
   const prevFraming = () =>
-    setFraming((f) => (f === 0 ? FRAMINGS.length - 1 : f - 1));
+    setFraming((f) => (f === 0 ? views.length - 1 : f - 1));
   const nextFraming = () =>
-    setFraming((f) => (f === FRAMINGS.length - 1 ? 0 : f + 1));
+    setFraming((f) => (f === views.length - 1 ? 0 : f + 1));
 
   const categoryHref =
     product.category === "Daily Wear"
@@ -199,12 +255,12 @@ export function ProductDetail({
               </Badge>
             ) : null}
             <img
-              src={product.image}
+              src={views[framing]?.src || product.image}
               alt={product.name}
               className="h-full w-full object-cover transition-all duration-500"
               style={{
-                objectPosition: FRAMINGS[framing].pos,
-                transform: `scale(${FRAMINGS[framing].zoom})`,
+                objectPosition: views[framing]?.pos || "center",
+                transform: `scale(${views[framing]?.zoom || 1})`,
               }}
             />
             {/* Prev/next controls (visible on mobile, also hover on desktop) */}
@@ -226,18 +282,18 @@ export function ProductDetail({
             </button>
             {/* Framing counter */}
             <span className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full bg-background/80 px-3 py-0.5 text-[0.65rem] font-medium uppercase tracking-wider text-muted-foreground backdrop-blur">
-              {framing + 1} / {FRAMINGS.length} — {FRAMINGS[framing].label}
+              {framing + 1} / {views.length} — {views[framing]?.label}
             </span>
           </div>
 
           {/* Thumbnail strip */}
           <div className="flex gap-2">
-            {FRAMINGS.map((f, i) => (
+            {views.map((v, i) => (
               <button
-                key={f.label}
+                key={`${v.src}-${i}`}
                 type="button"
                 onClick={() => setFraming(i)}
-                aria-label={`View ${f.label} angle`}
+                aria-label={`View ${v.label}`}
                 aria-pressed={framing === i}
                 className={cn(
                   "relative h-20 flex-1 overflow-hidden rounded-lg border bg-secondary transition-all",
@@ -247,16 +303,16 @@ export function ProductDetail({
                 )}
               >
                 <img
-                  src={product.image}
+                  src={v.src}
                   alt=""
                   className="h-full w-full object-cover"
                   style={{
-                    objectPosition: f.pos,
-                    transform: `scale(${f.zoom})`,
+                    objectPosition: v.pos,
+                    transform: `scale(${v.zoom})`,
                   }}
                 />
                 <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/50 to-transparent p-1 text-center text-[0.55rem] font-medium uppercase tracking-wider text-white">
-                  {f.label}
+                  {v.label}
                 </span>
               </button>
             ))}

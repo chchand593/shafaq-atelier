@@ -9,7 +9,7 @@ const TILES = [
   { src: "/images/best-1.jpg", label: "Bell-Sleeve Edit", tag: "#RaniaAbaya" },
   { src: "/images/new-1.jpg", label: "Gold-Trim Moments", tag: "#ZaraAbaya" },
   { src: "/images/daily-2.jpg", label: "Everyday Mocha", tag: "#SaharAbaya" },
-  { src: "/images/best-2.jpg", label: "Open-Front Styling", tag: "#YasminAbaya" },
+  { src: "/images/products/yasmin-floral-front.webp", label: "Floral Elegance", tag: "#YasminAbaya" },
   { src: "/images/custom.jpg", label: "Behind the Seams", tag: "#Bespoke" },
 ];
 

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Shirt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ProductCard } from "@/components/site/product-card";
 import { SectionHeader } from "@/components/site/section-header";
@@ -21,10 +21,24 @@ function CardSkeleton() {
   );
 }
 
+function EmptyState() {
+  return (
+    <div className="col-span-2 flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed py-16 text-center lg:col-span-4">
+      <span className="flex size-12 items-center justify-center rounded-full bg-secondary text-[var(--mocha)]">
+        <Shirt className="size-5" />
+      </span>
+      <p className="font-serif text-lg">No products available</p>
+      <p className="text-sm text-muted-foreground">
+        Our collection is being updated. Please check back soon.
+      </p>
+    </div>
+  );
+}
+
 export function DailyWear() {
   const { products, loading } = useApiProducts();
   const list = React.useMemo(
-    () => products.filter((p) => p.category === "Daily Wear"),
+    () => products.filter((p) => p.isFeatured === true || p.category === "Daily Wear"),
     [products]
   );
 
@@ -41,9 +55,11 @@ export function DailyWear() {
         <div className="mt-12 grid grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-4">
           {loading && list.length === 0
             ? Array.from({ length: 4 }).map((_, i) => <CardSkeleton key={i} />)
-            : list.map((product) => (
-                <ProductCard key={product.id} product={product} />
-              ))}
+            : list.length === 0
+              ? <EmptyState />
+              : list.map((product) => (
+                  <ProductCard key={product.id} product={product} />
+                ))}
         </div>
 
         <div className="mt-10 flex justify-center sm:justify-end">

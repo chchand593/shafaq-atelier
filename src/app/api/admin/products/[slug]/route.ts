@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/admin";
-import type { ColorOption } from "@/lib/site-data";
+import type { ColorImage, ColorOption } from "@/lib/site-data";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +23,8 @@ export async function PATCH(
     price: number;
     originalPrice: number;
     image: string;
+    images: string[];
+    colorImages?: ColorImage[];
     colorOptions: ColorOption[];
     sizes: string[];
     badge: string;
@@ -32,6 +34,9 @@ export async function PATCH(
     stock: number;
     lowStockThreshold: number;
     active: boolean;
+    isNewArrival?: boolean;
+    isBestSeller?: boolean;
+    isFeatured?: boolean;
   }>;
 
   const data: Record<string, unknown> = {};
@@ -40,6 +45,8 @@ export async function PATCH(
   if (body.price !== undefined) data.price = body.price;
   if (body.originalPrice !== undefined) data.originalPrice = body.originalPrice;
   if (body.image !== undefined) data.image = body.image;
+  if (body.images !== undefined) data.images = JSON.stringify(body.images);
+  if (body.colorImages !== undefined) data.colorImages = JSON.stringify(body.colorImages);
   if (body.colorOptions !== undefined) data.colors = JSON.stringify(body.colorOptions);
   if (body.sizes !== undefined) data.sizes = JSON.stringify(body.sizes);
   if (body.badge !== undefined) data.badge = body.badge;
@@ -49,6 +56,9 @@ export async function PATCH(
   if (body.stock !== undefined) data.stock = Math.max(0, body.stock);
   if (body.lowStockThreshold !== undefined) data.lowStockThreshold = Math.max(0, body.lowStockThreshold);
   if (body.active !== undefined) data.active = Boolean(body.active);
+  if (body.isNewArrival !== undefined) data.isNewArrival = body.isNewArrival;
+  if (body.isBestSeller !== undefined) data.isBestSeller = body.isBestSeller;
+  if (body.isFeatured !== undefined) data.isFeatured = body.isFeatured;
 
   const product = await db.product.update({
     where: { slug },

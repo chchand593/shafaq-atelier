@@ -32,6 +32,7 @@ import { cn } from "@/lib/utils";
 import { useUI, useCart, useWishlist, useRecentlyViewed } from "@/lib/store";
 import { useApiProducts } from "@/lib/use-products";
 import type { Product } from "@/lib/site-data";
+import { getColorImage, getColorGallery } from "@/components/site/product-card";
 import { formatPKR } from "@/lib/format";
 import { toast } from "sonner";
 import { ProductCard } from "@/components/site/product-card";
@@ -42,6 +43,34 @@ const FRAMINGS = [
   { label: "Detail", pos: "top" as const, zoom: "150%" as const },
   { label: "Hem", pos: "bottom" as const, zoom: "150%" as const },
 ];
+
+// Build the list of gallery views for a product. When the product ships a
+// multi-image `images` array we use those directly; otherwise we fall back to
+// the framing variants of the single primary image.
+type GalleryView = {
+  src: string;
+  label: string;
+  pos: "center" | "top" | "bottom";
+  zoom: "100%" | "150%";
+};
+
+function buildGallery(product: Product, colorHex?: string | null): GalleryView[] {
+  // Get all images for the selected color (or the product's default gallery)
+  const colorGallery = getColorGallery(product, colorHex ?? null);
+
+  if (colorGallery.length > 1) {
+    return colorGallery.map((src, i) => ({
+      src,
+      label: `View ${i + 1}`,
+      pos: "center",
+      zoom: "100%",
+    }));
+  }
+
+  // Single image — use FRAMINGS for the lookbook feel.
+  const src = colorGallery[0] || product.image;
+  return FRAMINGS.map((f) => ({ src, ...f }));
+}
 
 function TrustBadges() {
   const items = [
@@ -93,6 +122,13 @@ function QuickViewInner({ product }: { product: Product }) {
   const [qty, setQty] = React.useState(1);
   const [framing, setFraming] = React.useState(0);
 
+  // Build gallery views — color-aware so selecting a color shows the real
+  // photo for that color. Rebuilds when the product or selected color changes.
+  const views = React.useMemo(
+    () => buildGallery(product, activeColor?.hex),
+    [product, activeColor?.hex]
+  );
+
   // reset selections when product changes
   React.useEffect(() => {
     setActiveColor(product.colorOptions[0]);
@@ -123,11 +159,14 @@ function QuickViewInner({ product }: { product: Product }) {
       });
       return;
     }
+    // Use the color-specific image (real photo for the selected color) in the
+    // cart. Falls back to the main product image if no color image exists.
+    const cartImage = getColorImage(product, activeColor.hex);
     addToCart({
       productId: product.id,
       name: product.name,
       price: product.price,
-      image: product.image,
+      image: cartImage,
       color: activeColor.hex,
       colorName: activeColor.name,
       size: activeSize,
@@ -166,23 +205,26 @@ function QuickViewInner({ product }: { product: Product }) {
               </Badge>
             ) : null}
             <img
-              src={product.image}
+              src={views[framing]?.src || product.image}
               alt={product.name}
               className="h-full w-full object-cover transition-all duration-500"
               style={{
-                objectPosition: FRAMINGS[framing].pos,
+                objectPosition: views[framing]?.pos || "center",
                 objectFit: "cover",
-                transform: `scale(${FRAMINGS[framing].zoom === "150%" ? 1.5 : 1})`,
+                transform: `scale(${views[framing]?.zoom === "150%" ? 1.5 : 1})`,
               }}
             />
+            <span className="absolute bottom-2 left-1/2 z-10 -translate-x-1/2 rounded-full bg-background/80 px-2.5 py-0.5 text-[0.6rem] font-medium uppercase tracking-wider text-muted-foreground backdrop-blur">
+              {framing + 1} / {views.length} — {views[framing]?.label}
+            </span>
           </div>
           <div className="flex gap-2">
-            {FRAMINGS.map((f, i) => (
+            {views.map((v, i) => (
               <button
-                key={f.label}
+                key={`${v.src}-${i}`}
                 type="button"
                 onClick={() => setFraming(i)}
-                aria-label={`View ${f.label} angle`}
+                aria-label={`View ${v.label}`}
                 aria-pressed={framing === i}
                 className={cn(
                   "relative h-16 flex-1 overflow-hidden rounded-md border bg-secondary transition-all",
@@ -192,10 +234,10 @@ function QuickViewInner({ product }: { product: Product }) {
                 )}
               >
                 <img
-                  src={product.image}
+                  src={v.src}
                   alt=""
                   className="h-full w-full object-cover"
-                  style={{ objectPosition: f.pos, transform: `scale(${f.zoom === "150%" ? 1.5 : 1})` }}
+                  style={{ objectPosition: v.pos, transform: `scale(${v.zoom === "150%" ? 1.5 : 1})` }}
                 />
               </button>
             ))}

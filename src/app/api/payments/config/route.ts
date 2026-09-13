@@ -20,6 +20,9 @@ export async function GET() {
     gateway: getPaymentGateway(),
     codEnabled: settings.codEnabled,
     manualTransferEnabled: settings.manualTransferEnabled,
+    // Public base price (PKR) used by the Customized Abaya builder. This is a
+    // base price, not a secret — admins configure it via /api/admin/settings.
+    customAbayaBasePrice: settings.customAbayaBasePrice,
     manualTransfer: {
       jazzCashNumber: settings.jazzCashNumber,
       bankName: settings.bankName,

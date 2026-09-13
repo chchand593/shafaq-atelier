@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import type { ColorOption } from "@/lib/site-data";
+import type { ColorImage, ColorOption } from "@/lib/site-data";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +13,7 @@ function mapProduct(p: {
   image: string;
   colors: string;
   sizes: string;
+  colorImages: string;
   rating: number;
   reviewCount: number;
   stock: number;
@@ -20,6 +21,9 @@ function mapProduct(p: {
   fabric: string;
   care: string;
   description: string;
+  isNewArrival: boolean;
+  isBestSeller: boolean;
+  isFeatured: boolean;
 }) {
   return {
     id: p.slug,
@@ -31,6 +35,7 @@ function mapProduct(p: {
     colors: (JSON.parse(p.colors) as ColorOption[]).map((c) => c.hex),
     colorOptions: JSON.parse(p.colors) as ColorOption[],
     sizes: JSON.parse(p.sizes) as string[],
+    colorImages: JSON.parse(p.colorImages || "[]") as ColorImage[],
     rating: p.rating,
     reviews: p.reviewCount,
     stock: p.stock,
@@ -38,6 +43,9 @@ function mapProduct(p: {
     fabric: p.fabric,
     care: p.care,
     description: p.description,
+    isNewArrival: p.isNewArrival,
+    isBestSeller: p.isBestSeller,
+    isFeatured: p.isFeatured,
   };
 }
 
