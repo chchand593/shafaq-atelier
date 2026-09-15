@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import bcrypt from "bcryptjs";
 
 export const dynamic = "force-dynamic";
 
 // GET /api/admin/debug
-// No auth required — diagnostic only. Shows database connection status,
-// table existence, admin user, product counts, and schema info.
-// Does NOT expose any passwords or secrets.
+// No auth required — diagnostic only. Shows database connection, tables,
+// admin user, password verification, product counts, and environment info.
 
 export async function GET() {
   const checks: { label: string; status: "ok" | "fail"; detail: string }[] = [];
+  let adminDetails = "";
+  let allAdmins = "";
 
   // 1. Database connection
   try {
@@ -35,18 +37,47 @@ export async function GET() {
     });
   }
 
-  // 3. Admin user
+  // 3. Admin user + password verification
   try {
     const admin = await db.user.findUnique({
       where: { email: "admin@shafaqatelier.pk" },
-      select: { email: true, role: true, name: true },
+      select: { email: true, role: true, name: true, passwordHash: true },
     });
+
     if (admin) {
+      // Check password hash format
+      const hashPrefix = admin.passwordHash?.substring(0, 20) || "NONE";
+      const hashLength = admin.passwordHash?.length || 0;
+
+      // Test bcrypt.compare with the known password
+      let passwordCheck = "UNKNOWN";
+      try {
+        const isValid = await bcrypt.compare("Admin@123456", admin.passwordHash);
+        passwordCheck = isValid ? "✅ MATCH" : "❌ MISMATCH";
+      } catch (e) {
+        passwordCheck = `❌ ERROR: ${e instanceof Error ? e.message.substring(0, 100) : "unknown"}`;
+      }
+
       checks.push({
         label: "Admin User",
         status: "ok",
         detail: `Found: ${admin.email} (role: ${admin.role})`,
       });
+
+      checks.push({
+        label: "Password Verify (Admin@123456)",
+        status: passwordCheck.includes("✅") ? "ok" : "fail",
+        detail: `${passwordCheck} | hash: ${hashPrefix}... (${hashLength} chars)`,
+      });
+
+      adminDetails = `
+        <div style="background:#f4f4f5;border-radius:8px;padding:16px;margin-top:12px;font-size:13px">
+          <p><strong>Email:</strong> ${admin.email}</p>
+          <p><strong>Role:</strong> ${admin.role}</p>
+          <p><strong>Name:</strong> ${admin.name}</p>
+          <p><strong>Hash prefix:</strong> <code>${hashPrefix}...</code> (${hashLength} chars)</p>
+          <p><strong>Password "Admin@123456":</strong> ${passwordCheck}</p>
+        </div>`;
     } else {
       checks.push({
         label: "Admin User",
@@ -60,6 +91,30 @@ export async function GET() {
       status: "fail",
       detail: e instanceof Error ? e.message.substring(0, 200) : "Query failed",
     });
+  }
+
+  // 3b. List ALL admin users (check for duplicates)
+  try {
+    const admins = await db.user.findMany({
+      where: { role: "admin" },
+      select: { email: true, role: true, name: true },
+    });
+    if (admins.length > 0) {
+      const adminList = admins.map((a) => `${a.email} (${a.name})`).join(", ");
+      checks.push({
+        label: "All Admin Users",
+        status: admins.length === 1 ? "ok" : "fail",
+        detail: `${admins.length} admin(s): ${adminList}`,
+      });
+      allAdmins = `
+        <div style="background:#f4f4f5;border-radius:8px;padding:16px;margin-top:12px;font-size:13px">
+          <p><strong>Admin users (${admins.length}):</strong></p>
+          ${admins.map((a) => `<p>• ${a.email} — ${a.name} — role: ${a.role}</p>`).join("")}
+          ${admins.length > 1 ? '<p style="color:#ef4444;font-weight:600">⚠️ Duplicate admin users found!</p>' : ""}
+        </div>`;
+    }
+  } catch {
+    // skip
   }
 
   // 4. Product table
@@ -115,63 +170,27 @@ export async function GET() {
     });
   }
 
-  // 7. Color table
-  try {
-    const count = await db.color.count();
-    checks.push({ label: "Color Table", status: "ok", detail: `${count} colors` });
-  } catch (e) {
-    checks.push({
-      label: "Color Table",
-      status: "fail",
-      detail: e instanceof Error ? e.message.substring(0, 200) : "Table missing",
-    });
+  // 7-10. Other tables
+  const tableChecks = [
+    { model: "color", label: "Color Table" },
+    { model: "fabric", label: "Fabric Table" },
+    { model: "customizationOption", label: "CustomizationOption Table" },
+    { model: "abayaStyle", label: "AbayaStyle Table" },
+  ];
+  for (const tc of tableChecks) {
+    try {
+      const count = await (db as any)[tc.model].count();
+      checks.push({ label: tc.label, status: "ok", detail: `${count} records` });
+    } catch (e) {
+      checks.push({
+        label: tc.label,
+        status: "fail",
+        detail: e instanceof Error ? e.message.substring(0, 200) : "Table missing",
+      });
+    }
   }
 
-  // 8. Fabric table
-  try {
-    const count = await db.fabric.count();
-    checks.push({ label: "Fabric Table", status: "ok", detail: `${count} fabrics` });
-  } catch (e) {
-    checks.push({
-      label: "Fabric Table",
-      status: "fail",
-      detail: e instanceof Error ? e.message.substring(0, 200) : "Table missing",
-    });
-  }
-
-  // 9. CustomizationOption table
-  try {
-    const count = await db.customizationOption.count();
-    checks.push({
-      label: "CustomizationOption Table",
-      status: "ok",
-      detail: `${count} options`,
-    });
-  } catch (e) {
-    checks.push({
-      label: "CustomizationOption Table",
-      status: "fail",
-      detail: e instanceof Error ? e.message.substring(0, 200) : "Table missing",
-    });
-  }
-
-  // 10. AbayaStyle table
-  try {
-    const count = await db.abayaStyle.count();
-    checks.push({
-      label: "AbayaStyle Table",
-      status: "ok",
-      detail: `${count} styles`,
-    });
-  } catch (e) {
-    checks.push({
-      label: "AbayaStyle Table",
-      status: "fail",
-      detail: e instanceof Error ? e.message.substring(0, 200) : "Table missing",
-    });
-  }
-
-  // 11. Environment variables (only check presence, not values)
+  // 11. Environment variables
   const envVars = {
     DATABASE_URL: process.env.DATABASE_URL ? "SET" : "MISSING",
     NEXTAUTH_URL: process.env.NEXTAUTH_URL ? "SET" : "MISSING",
@@ -180,7 +199,7 @@ export async function GET() {
     BLOB_READ_WRITE_TOKEN: process.env.BLOB_READ_WRITE_TOKEN ? "SET" : "MISSING",
   };
 
-  // Build HTML response
+  // Build HTML
   const checksHtml = checks
     .map(
       (c) => `
@@ -204,28 +223,31 @@ export async function GET() {
     )
     .join("");
 
-  const allOk = checks.every((c) => c.status === "ok");
+  const passwordFail = checks.find((c) => c.label === "Password Verify (Admin@123456)")?.status === "fail";
   const adminExists = checks.find((c) => c.label === "Admin User")?.status === "ok";
 
-  const actionHtml = !adminExists
-    ? `<div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:16px;margin-top:16px">
-         <p style="font-weight:600;margin:0 0 8px">⚠️ Admin user not found</p>
-         <p style="margin:0 0 12px;font-size:14px">Run setup by visiting this URL in your browser:</p>
+  const actionHtml = passwordFail
+    ? `<div style="background:#fee2e2;border:1px solid #fecaca;border-radius:8px;padding:16px;margin-top:16px">
+         <p style="font-weight:600;margin:0 0 8px">❌ Password mismatch detected</p>
+         <p style="margin:0 0 12px;font-size:14px">Reset the admin password by visiting:</p>
          <code style="display:block;background:#fff;padding:12px;border-radius:6px;font-size:13px;word-break:break-all">
-           ${process.env.NEXTAUTH_URL || "https://your-site.vercel.app"}/api/admin/setup?secret=YOUR_SETUP_SECRET
+           ${process.env.NEXTAUTH_URL || "https://your-site.vercel.app"}/api/admin/reset-admin-password?secret=YOUR_SETUP_SECRET
          </code>
        </div>`
-    : allOk
-      ? `<div style="background:#dcfce7;border:1px solid #86efac;border-radius:8px;padding:16px;margin-top:16px">
+    : !adminExists
+      ? `<div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:16px;margin-top:16px">
+           <p style="font-weight:600;margin:0 0 8px">⚠️ Admin user not found</p>
+           <p style="margin:0 0 12px;font-size:14px">Run setup:</p>
+           <code style="display:block;background:#fff;padding:12px;border-radius:6px;font-size:13px;word-break:break-all">
+             ${process.env.NEXTAUTH_URL || "https://your-site.vercel.app"}/api/admin/setup?secret=YOUR_SETUP_SECRET
+           </code>
+         </div>`
+      : `<div style="background:#dcfce7;border:1px solid #86efac;border-radius:8px;padding:16px;margin-top:16px">
            <p style="font-weight:600;margin:0">✅ Everything looks good!</p>
            <p style="margin:8px 0 0;font-size:14px">Login at <a href="/admin" style="color:#c9a24b">/admin</a> with admin@shafaqatelier.pk / Admin@123456</p>
-         </div>`
-      : `<div style="background:#fee2e2;border:1px solid #fecaca;border-radius:8px;padding:16px;margin-top:16px">
-           <p style="font-weight:600;margin:0">❌ Some checks failed</p>
-           <p style="margin:8px 0 0;font-size:14px">Run setup: <code>${process.env.NEXTAUTH_URL || "https://your-site.vercel.app"}/api/admin/setup?secret=YOUR_SETUP_SECRET</code></p>
          </div>`;
 
-  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>ShafaQ Atelier — Debug</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#fafafa;color:#1a1a1a;margin:0;padding:40px 20px}.container{max-width:700px;margin:0 auto}h1{font-size:24px;font-weight:600;margin:0 0 8px}h2{font-size:18px;font-weight:600;margin:24px 0 8px}.card{background:#fff;border:1px solid #e4e4e7;border-radius:12px;padding:24px;margin-bottom:16px}code{font-family:monospace}a{color:#c9a24b}</style></head><body><div class="container"><h1>🔧 ShafaQ Atelier — Debug Report</h1><p style="color:#666;margin:0 0 24px;font-size:14px">Generated at ${new Date().toISOString()}</p><div class="card"><h2>Database Checks</h2>${checksHtml}</div><div class="card"><h2>Environment Variables</h2>${envHtml}</div>${actionHtml}</div></body></html>`;
+  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>ShafaQ Atelier — Debug</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#fafafa;color:#1a1a1a;margin:0;padding:40px 20px}.container{max-width:700px;margin:0 auto}h1{font-size:24px;font-weight:600;margin:0 0 8px}h2{font-size:18px;font-weight:600;margin:24px 0 8px}.card{background:#fff;border:1px solid #e4e4e7;border-radius:12px;padding:24px;margin-bottom:16px}code{font-family:monospace}a{color:#c9a24b}</style></head><body><div class="container"><h1>🔧 ShafaQ Atelier — Debug Report</h1><p style="color:#666;margin:0 0 24px;font-size:14px">Generated at ${new Date().toISOString()}</p><div class="card"><h2>Database Checks</h2>${checksHtml}${adminDetails}${allAdmins}</div><div class="card"><h2>Environment Variables</h2>${envHtml}</div>${actionHtml}</div></body></html>`;
 
   return new NextResponse(html, {
     status: 200,
