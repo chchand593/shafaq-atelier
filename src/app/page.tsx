@@ -20,6 +20,11 @@ import { AuthModal } from "@/components/site/auth-modal";
 import { CompareBar } from "@/components/site/compare-bar";
 import { GiftCardModal } from "@/components/site/gift-card-modal";
 
+// Force dynamic rendering so the page is always fresh — not cached at build
+// time with empty data. The homepage uses client-side components that fetch
+// from /api/products, but Next.js may still pre-render the shell statically.
+export const dynamic = "force-dynamic";
+
 export default function Home() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
