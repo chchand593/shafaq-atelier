@@ -141,8 +141,8 @@ export async function GET() {
     });
     checks.push({
       label: "New Arrivals (isNewArrival=true)",
-      status: count > 0 ? "ok" : "fail",
-      detail: `${count} products`,
+      status: count > 0 ? "ok" : "ok",
+      detail: count > 0 ? `${count} products` : `${count} products (column works — run /api/admin/setup to populate)`,
     });
   } catch (e) {
     checks.push({
@@ -159,8 +159,8 @@ export async function GET() {
     });
     checks.push({
       label: "Best Sellers (isBestSeller=true)",
-      status: count > 0 ? "ok" : "fail",
-      detail: `${count} products`,
+      status: count > 0 ? "ok" : "ok",
+      detail: count > 0 ? `${count} products` : `${count} products (column works — run /api/admin/setup to populate)`,
     });
   } catch (e) {
     checks.push({
@@ -226,26 +226,58 @@ export async function GET() {
   const passwordFail = checks.find((c) => c.label === "Password Verify (Admin@123456)")?.status === "fail";
   const adminExists = checks.find((c) => c.label === "Admin User")?.status === "ok";
 
-  const actionHtml = passwordFail
-    ? `<div style="background:#fee2e2;border:1px solid #fecaca;border-radius:8px;padding:16px;margin-top:16px">
+  // Detect schema-column / table failures so we can show the Fix Schema button.
+  const schemaFailures = checks.filter((c) =>
+    ["New Arrivals", "Best Sellers", "Color Table", "Fabric Table",
+     "CustomizationOption Table", "AbayaStyle Table"].includes(c.label) &&
+    c.status === "fail"
+  );
+
+  const schemaNeedsFix =
+    schemaFailures.length > 0 &&
+    // Only flag schema-fix if the failure looks like a missing column/table
+    // (i.e. the detail mentions "does not exist" or "missing") rather than
+    // a benign "0 products" count.
+    schemaFailures.some((c) => /not exist|missing|no such|relation/i.test(c.detail));
+
+  const base = process.env.NEXTAUTH_URL || "https://your-site.vercel.app";
+
+  let actionHtml: string;
+  if (passwordFail) {
+    actionHtml = `<div style="background:#fee2e2;border:1px solid #fecaca;border-radius:8px;padding:16px;margin-top:16px">
          <p style="font-weight:600;margin:0 0 8px">❌ Password mismatch detected</p>
          <p style="margin:0 0 12px;font-size:14px">Reset the admin password by visiting:</p>
          <code style="display:block;background:#fff;padding:12px;border-radius:6px;font-size:13px;word-break:break-all">
-           ${process.env.NEXTAUTH_URL || "https://your-site.vercel.app"}/api/admin/reset-admin-password?secret=YOUR_SETUP_SECRET
+           ${base}/api/admin/reset-admin-password?secret=YOUR_SETUP_SECRET
          </code>
-       </div>`
-    : !adminExists
-      ? `<div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:16px;margin-top:16px">
+       </div>`;
+  } else if (!adminExists) {
+    actionHtml = `<div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:16px;margin-top:16px">
            <p style="font-weight:600;margin:0 0 8px">⚠️ Admin user not found</p>
            <p style="margin:0 0 12px;font-size:14px">Run setup:</p>
            <code style="display:block;background:#fff;padding:12px;border-radius:6px;font-size:13px;word-break:break-all">
-             ${process.env.NEXTAUTH_URL || "https://your-site.vercel.app"}/api/admin/setup?secret=YOUR_SETUP_SECRET
+             ${base}/api/admin/setup?secret=YOUR_SETUP_SECRET
            </code>
-         </div>`
-      : `<div style="background:#dcfce7;border:1px solid #86efac;border-radius:8px;padding:16px;margin-top:16px">
+         </div>`;
+  } else if (schemaNeedsFix) {
+    actionHtml = `<div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:16px;margin-top:16px">
+           <p style="font-weight:600;margin:0 0 8px">⚠️ Database schema is out of sync</p>
+           <p style="margin:0 0 12px;font-size:14px">Some columns / tables are missing on the production database. Fix this with one click:</p>
+           <a href="${base}/api/admin/fix-schema?secret=YOUR_SETUP_SECRET" style="display:inline-block;padding:10px 18px;background:#1a1a1a;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;margin-bottom:12px">🔧 Fix Schema Now →</a>
+           <code style="display:block;background:#fff;padding:12px;border-radius:6px;font-size:13px;word-break:break-all">
+             ${base}/api/admin/fix-schema?secret=YOUR_SETUP_SECRET
+           </code>
+           <p style="margin:12px 0 0;font-size:13px;color:#666">After the schema is fixed, run setup again to populate the new tables:</p>
+           <code style="display:block;background:#fff;padding:12px;border-radius:6px;font-size:13px;word-break:break-all">
+             ${base}/api/admin/setup?secret=YOUR_SETUP_SECRET
+           </code>
+         </div>`;
+  } else {
+    actionHtml = `<div style="background:#dcfce7;border:1px solid #86efac;border-radius:8px;padding:16px;margin-top:16px">
            <p style="font-weight:600;margin:0">✅ Everything looks good!</p>
            <p style="margin:8px 0 0;font-size:14px">Login at <a href="/admin" style="color:#c9a24b">/admin</a> with admin@shafaqatelier.pk / Admin@123456</p>
          </div>`;
+  }
 
   const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>ShafaQ Atelier — Debug</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#fafafa;color:#1a1a1a;margin:0;padding:40px 20px}.container{max-width:700px;margin:0 auto}h1{font-size:24px;font-weight:600;margin:0 0 8px}h2{font-size:18px;font-weight:600;margin:24px 0 8px}.card{background:#fff;border:1px solid #e4e4e7;border-radius:12px;padding:24px;margin-bottom:16px}code{font-family:monospace}a{color:#c9a24b}</style></head><body><div class="container"><h1>🔧 ShafaQ Atelier — Debug Report</h1><p style="color:#666;margin:0 0 24px;font-size:14px">Generated at ${new Date().toISOString()}</p><div class="card"><h2>Database Checks</h2>${checksHtml}${adminDetails}${allAdmins}</div><div class="card"><h2>Environment Variables</h2>${envHtml}</div>${actionHtml}</div></body></html>`;
 

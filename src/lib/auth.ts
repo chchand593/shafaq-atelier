@@ -32,8 +32,15 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
+        // Defense in depth: trim + lowercase the email on the SERVER too, so
+        // any client (not just our AuthModal) that posts a leading/trailing
+        // space or mixed-case email still matches a user. The client already
+        // does this, but a direct API hit (script, third-party client) might
+        // not — and a silent login failure would be very hard to debug.
+        const email = credentials.email.trim().toLowerCase();
+
         const user = await db.user.findUnique({
-          where: { email: credentials.email.toLowerCase() },
+          where: { email },
         });
         if (!user) return null;
 

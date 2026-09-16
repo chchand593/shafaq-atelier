@@ -19,6 +19,8 @@ import { SearchOverlay } from "@/components/site/search-overlay";
 import { AuthModal } from "@/components/site/auth-modal";
 import { CompareBar } from "@/components/site/compare-bar";
 import { GiftCardModal } from "@/components/site/gift-card-modal";
+import { AdminErrorListener } from "@/components/site/admin-error-listener";
+import { Suspense } from "react";
 
 // Force dynamic rendering so the page is always fresh — not cached at build
 // time with empty data. The homepage uses client-side components that fetch
@@ -53,6 +55,14 @@ export default function Home() {
       <AuthModal />
       <CompareBar />
       <GiftCardModal />
+
+      {/* Listens for ?admin_error=auth|denied query param emitted by the
+          middleware when an unauthenticated or non-admin user tries to visit
+          /admin. Shows a toast + auto-opens the auth modal so the user can
+          sign in. Wrapped in Suspense because useSearchParams requires it. */}
+      <Suspense fallback={null}>
+        <AdminErrorListener />
+      </Suspense>
     </div>
   );
 }
