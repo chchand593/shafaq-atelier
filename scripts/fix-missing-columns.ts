@@ -92,10 +92,10 @@ async function main() {
 async function verifySchema() {
   const out: { label: string; ok: boolean; detail: string }[] = [];
 
-  // isNewArrival / isBestSeller / isFeatured / colorImages columns on Product.
+  // isNewArrival / isBestSeller / isFeatured / images / colorImages columns on Product.
   // Use findFirst with select — works regardless of column type (Boolean / Text)
   // and throws only if the column is missing.
-  const cols = ["isNewArrival", "isBestSeller", "isFeatured", "colorImages"];
+  const cols = ["isNewArrival", "isBestSeller", "isFeatured", "images", "colorImages"];
   for (const col of cols) {
     try {
       await db.product.findFirst({ select: { [col]: true } as any });

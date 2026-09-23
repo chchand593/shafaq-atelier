@@ -19,6 +19,7 @@ import {
   Shirt,
   Sparkles,
   Images,
+  Mail,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -29,6 +30,7 @@ const NAV_ITEMS = [
   { href: "/admin/orders", label: "Orders", icon: ShoppingCart },
   { href: "/admin/customers", label: "Customers", icon: Users },
   { href: "/admin/reviews", label: "Reviews", icon: Star },
+  { href: "/admin/newsletter", label: "Newsletter", icon: Mail },
   { href: "/admin/colors", label: "Colors", icon: Palette },
   { href: "/admin/fabrics", label: "Fabrics", icon: Shirt },
   { href: "/admin/customization", label: "Add-ons", icon: Sparkles },

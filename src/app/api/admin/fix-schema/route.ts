@@ -40,7 +40,7 @@ export async function GET(request: Request) {
 
   // Post-fix verification — re-check the same things /api/admin/debug checks.
   const verify: { label: string; ok: boolean; detail: string }[] = [];
-  const cols = ["isNewArrival", "isBestSeller", "isFeatured", "colorImages"];
+  const cols = ["isNewArrival", "isBestSeller", "isFeatured", "images", "colorImages"];
   for (const col of cols) {
     try {
       await db.product.findFirst({ select: { [col]: true } as any });

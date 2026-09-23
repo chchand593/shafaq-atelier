@@ -26,11 +26,13 @@ against Neon). This patch ships **three** ways to fix that, all 100% idempotent.
 
 | File | Purpose |
 |------|---------|
-| `src/lib/fix-schema.ts` | Shared idempotent DDL helper (supports PostgreSQL + SQLite). |
+| `src/lib/fix-schema.ts` | Shared idempotent DDL helper (supports PostgreSQL + SQLite). **Splits multi-statement DDL into individual `$executeRawUnsafe` calls** to avoid PostgreSQL 42601 ("cannot insert multiple commands into a prepared statement"). Adds the missing `Product.images` column. Also dedupes admin users. |
 | `scripts/fix-missing-columns.ts` | CLI script — run with `bun` against any `DATABASE_URL`. |
 | `scripts/fix-missing-columns.sql` | Raw PostgreSQL SQL fallback (Neon SQL Editor / psql). |
+| `scripts/delete-duplicate-admin.ts` | CLI script — deletes duplicate admin users, keeps `admin@shafaqatelier.pk`, removes the rest (e.g. legacy `admin@laylamodest.pk`). |
 | `src/app/api/admin/fix-schema/route.ts` | Browser-friendly API route (secret-gated). |
-| `src/app/api/admin/debug/route.ts` (updated) | Now shows a "🔧 Fix Schema" button when the schema is out of sync, and reports `✅ column works` (instead of ❌) for empty New Arrivals / Best Sellers sections. |
+| `src/app/api/admin/delete-duplicate-admins/route.ts` | Browser-friendly API route that deletes duplicate admins (keeps `admin@shafaqatelier.pk`). |
+| `src/app/api/admin/debug/route.ts` (updated) | Now shows a "🔧 Fix Schema" button when the schema is out of sync, a "🗑️ Delete Duplicate Admins" button when multiple admins exist, and reports `✅ column works` (instead of ❌) for empty New Arrivals / Best Sellers sections. |
 
 ---
 
@@ -86,6 +88,7 @@ return the new column / table counts (each should be > 0).
 | `isNewArrival` | BOOLEAN | `false` | Flags products to show in the "New Arrivals" storefront section. |
 | `isBestSeller` | BOOLEAN | `false` | Flags products to show in the "Best Sellers" storefront section. |
 | `isFeatured`   | BOOLEAN | `false` | Flags products to show in the "Daily Wear" / featured section. |
+| `images`       | TEXT    | `'[]'`  | JSON array of image URLs (the multiple images gallery; `image` is the primary/first). |
 | `colorImages`  | TEXT    | `'[]'`  | JSON array of `{colorHex, colorName, image, images?}` — real photos per color. |
 
 ### New tables
@@ -102,10 +105,33 @@ return the new column / table counts (each should be > 0).
 
 ## After the fix
 
-1. Visit `/api/admin/setup?secret=YOUR_SETUP_SECRET` to seed data into the new tables.
-2. Visit `/api/admin/debug` to confirm everything is ✅.
-3. Login at `/admin` with `admin@shafaqatelier.pk` / `Admin@123456`.
-4. **Security**: Once everything works, remove `SETUP_SECRET` from Vercel to disable the `/api/admin/setup`, `/api/admin/fix-schema`, and `/api/admin/reset-admin-password` routes.
+1. Visit `/api/admin/delete-duplicate-admins?secret=YOUR_SETUP_SECRET` if the debug report shows duplicate admins (e.g. legacy `admin@laylamodest.pk`). This keeps only `admin@shafaqatelier.pk` and deletes the rest.
+2. Visit `/api/admin/setup?secret=YOUR_SETUP_SECRET` to seed data into the new tables.
+3. Visit `/api/admin/debug` to confirm everything is ✅.
+4. Login at `/admin` with `admin@shafaqatelier.pk` / `Admin@123456`.
+5. **Security**: Once everything works, remove `SETUP_SECRET` from Vercel to disable the `/api/admin/setup`, `/api/admin/fix-schema`, `/api/admin/delete-duplicate-admins`, and `/api/admin/reset-admin-password` routes.
+
+---
+
+## Order of operations (recommended)
+
+```
+1. /api/admin/fix-schema?secret=YOUR_SETUP_SECRET
+   → adds Product.images + 4 other columns
+   → creates 5 tables (each statement runs separately — no 42601)
+   → also dedupes admin users
+
+2. /api/admin/delete-duplicate-admins?secret=YOUR_SETUP_SECRET
+   → (only if step 1 reported "Before: 2+, after: 1")
+   → belt-and-braces dedupe; keeps admin@shafaqatelier.pk only
+
+3. /api/admin/setup?secret=YOUR_SETUP_SECRET
+   → seeds 9 products + 105+ colors + 8 fabrics + 26 options + 4 styles
+   → uses upsert (won't create duplicate admins)
+
+4. /api/admin/debug
+   → should show "✅ Everything looks good!"
+```
 
 ---
 

@@ -18,10 +18,15 @@ export type CartLineInput = {
   colorName: string;
   size: string;
   qty: number;
+  // For custom-abaya orders: full customization details serialised as a
+  // JSON string. Null for regular catalog items. Persisted to OrderItem.customization
+  // when the order is placed.
+  customization?: string | null;
 };
 
 export type CartLine = CartLineInput & {
-  // composite key for uniqueness
+  // composite key for uniqueness — includes customization so two custom
+  // abayas with the same base color/size but different options don't merge.
   key: string;
 };
 
@@ -33,8 +38,16 @@ type CartState = {
   clear: () => void;
 };
 
-function lineKey(l: { productId: string; color: string; size: string }) {
-  return `${l.productId}__${l.color}__${l.size}`;
+function lineKey(l: {
+  productId: string;
+  color: string;
+  size: string;
+  customization?: string | null;
+}) {
+  // Include a short customization hash in the key so two custom abayas with
+  // different options but the same color/size don't incorrectly merge.
+  const ch = l.customization ? `${l.customization.length}-${l.customization.slice(0, 8)}` : "";
+  return `${l.productId}__${l.color}__${l.size}__${ch}`;
 }
 
 export const useCart = create<CartState>()(

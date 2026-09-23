@@ -152,6 +152,14 @@ export function ProductDetail({
     window.scrollTo({ top: 0 });
   }, [product.id, pushRecentlyViewed]);
 
+  // Reset framing index to 0 when the active color changes — otherwise
+  // switching from a color with N images to one with M < N images leaves
+  // `framing` pointing past the end of the new `views` array and the
+  // main image falls back to product.image.
+  React.useEffect(() => {
+    setFraming(0);
+  }, [activeColor?.hex]);
+
   const wished = ids.includes(product.id);
 
   const stockQty = product.stock ?? 50;

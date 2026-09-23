@@ -21,6 +21,7 @@ async function getProduct(slug: string) {
     price: r.price,
     originalPrice: r.originalPrice ?? undefined,
     image: r.image,
+    images: JSON.parse(r.images || "[]") as string[],
     colors: (JSON.parse(r.colors) as ColorOption[]).map((c) => c.hex),
     colorOptions: JSON.parse(r.colors) as ColorOption[],
     colorImages: JSON.parse(r.colorImages || "[]") as ColorImage[],

@@ -223,22 +223,25 @@ async function runSetup() {
   const royalColors = [
     { hex: "#b87878", name: "Dusty Rose" }, { hex: "#1a6b6b", name: "Teal" }, { hex: "#f0c8a8", name: "Peach" }, { hex: "#3a3633", name: "Charcoal" }, { hex: "#8a9a7b", name: "Sage Green" },
   ];
+  // AI-generated PNG images for each color variant. The color-swap feature
+  // on the storefront reads these colorImages and swaps the main image when
+  // the customer clicks a color swatch.
   const royalColorImages = [
-    { colorHex: "#b87878", colorName: "Dusty Rose", image: "/images/products/royal-pleated/dusty-rose-1.webp" },
-    { colorHex: "#1a6b6b", colorName: "Teal", image: "/images/products/royal-pleated/teal-1.webp" },
-    { colorHex: "#f0c8a8", colorName: "Peach", image: "/images/products/royal-pleated/peach-1.webp" },
-    { colorHex: "#3a3633", colorName: "Charcoal", image: "/images/products/royal-pleated/charcoal-1.webp", images: ["/images/products/royal-pleated/charcoal-2.webp"] },
-    { colorHex: "#8a9a7b", colorName: "Sage Green", image: "/images/products/royal-pleated/sage-green-1.webp" },
+    { colorHex: "#b87878", colorName: "Dusty Rose", image: "/images/products/royal-pleated/dusty-rose-1.png" },
+    { colorHex: "#1a6b6b", colorName: "Teal", image: "/images/products/royal-pleated/teal-1.png" },
+    { colorHex: "#f0c8a8", colorName: "Peach", image: "/images/products/royal-pleated/peach-1.png" },
+    { colorHex: "#3a3633", colorName: "Charcoal", image: "/images/products/royal-pleated/charcoal-1.png" },
+    { colorHex: "#8a9a7b", colorName: "Sage Green", image: "/images/products/royal-pleated/sage-green-1.png" },
   ];
   const royalGallery = [
-    "/images/products/royal-pleated/dusty-rose-1.webp", "/images/products/royal-pleated/teal-1.webp", "/images/products/royal-pleated/peach-1.webp", "/images/products/royal-pleated/charcoal-1.webp", "/images/products/royal-pleated/charcoal-2.webp", "/images/products/royal-pleated/sage-green-1.webp",
+    "/images/products/royal-pleated/dusty-rose-1.png", "/images/products/royal-pleated/teal-1.png", "/images/products/royal-pleated/peach-1.png", "/images/products/royal-pleated/charcoal-1.png", "/images/products/royal-pleated/sage-green-1.png",
   ];
   await db.product.upsert({
     where: { slug: "royal-pleated-abaya" },
-    update: { name: "Royal Pleated Abaya — Full Coverage Collection", category: "Daily Wear", price: 12500, image: "/images/products/royal-pleated/dusty-rose-1.webp", images: JSON.stringify(royalGallery), colors: JSON.stringify(royalColors), colorImages: JSON.stringify(royalColorImages), fabric: "Premium pleated crepe", care: "Dry clean recommended", description: "Royal Pleated Abaya — Full Coverage Collection.", badge: "Full Coverage", stock: 25, active: true, isNewArrival: true, isFeatured: true },
-    create: { slug: "royal-pleated-abaya", name: "Royal Pleated Abaya — Full Coverage Collection", category: "Daily Wear", price: 12500, image: "/images/products/royal-pleated/dusty-rose-1.webp", images: JSON.stringify(royalGallery), colorImages: JSON.stringify(royalColorImages), colors: JSON.stringify(royalColors), sizes: JSON.stringify(ALL_SIZES), fabric: "Premium pleated crepe", care: "Dry clean recommended", description: "Royal Pleated Abaya — Full Coverage Collection.", badge: "Full Coverage", stock: 25, active: true, isNewArrival: true, isFeatured: true, rating: 5.0, reviewCount: 0 },
+    update: { name: "Royal Pleated Abaya — Full Coverage Collection", category: "Daily Wear", price: 12500, image: "/images/products/royal-pleated/dusty-rose-1.png", images: JSON.stringify(royalGallery), colors: JSON.stringify(royalColors), colorImages: JSON.stringify(royalColorImages), fabric: "Premium pleated crepe", care: "Dry clean recommended", description: "Royal Pleated Abaya — Full Coverage Collection. A flowing pleated silhouette crafted in premium crepe — designed for full coverage and effortless grace. Available in five signature shades, each with its own color-specific photo.", badge: "Full Coverage", stock: 25, active: true, isNewArrival: true, isFeatured: true },
+    create: { slug: "royal-pleated-abaya", name: "Royal Pleated Abaya — Full Coverage Collection", category: "Daily Wear", price: 12500, image: "/images/products/royal-pleated/dusty-rose-1.png", images: JSON.stringify(royalGallery), colorImages: JSON.stringify(royalColorImages), colors: JSON.stringify(royalColors), sizes: JSON.stringify(ALL_SIZES), fabric: "Premium pleated crepe", care: "Dry clean recommended", description: "Royal Pleated Abaya — Full Coverage Collection. A flowing pleated silhouette crafted in premium crepe — designed for full coverage and effortless grace. Available in five signature shades, each with its own color-specific photo.", badge: "Full Coverage", stock: 25, active: true, isNewArrival: true, isFeatured: true, rating: 5.0, reviewCount: 0 },
   });
-  results.push("Royal Pleated Abaya created (5 colors + colorImages)");
+  results.push("Royal Pleated Abaya created (5 colors + AI-generated PNG colorImages)");
 
   // 4. Section flags
   await db.product.updateMany({ where: { category: "Daily Wear" }, data: { isFeatured: true } });

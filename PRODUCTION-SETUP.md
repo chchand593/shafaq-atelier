@@ -106,9 +106,23 @@ This checks all tables, counts, admin user, and product flags.
 | `bun run scripts/create-admin.ts` | Create/reset admin user |
 | `bun run scripts/seed-production.ts` | Seed full production DB |
 | `bun run scripts/verify-db.ts` | Verify DB state |
+| `bun run scripts/fix-missing-columns.ts` | Add missing Product columns + create Color/Fabric/CustomizationOption/AbayaStyle/AbayaImage tables (idempotent) |
+| `bun run scripts/delete-duplicate-admin.ts` | Delete duplicate admin users — keeps `admin@shafaqatelier.pk`, removes the rest (e.g. `admin@laylamodest.pk`) |
 | `bun run dev` | Start dev server |
 | `bun run build` | Production build |
 | `bun run lint` | ESLint check |
+
+## Browser Routes (Vercel — no terminal needed)
+
+All routes are protected by `SETUP_SECRET` env var (replace `YOUR_SETUP_SECRET` with your actual secret):
+
+| URL | Purpose |
+|-----|---------|
+| `/api/admin/fix-schema?secret=YOUR_SETUP_SECRET` | Add missing Product columns + create the 5 new tables. Idempotent. Also dedupes admin users. |
+| `/api/admin/setup?secret=YOUR_SETUP_SECRET` | Seed 9 products + 105+ colors + 8 fabrics + 26 options + 4 styles. Creates admin user via `upsert` (no duplicates). |
+| `/api/admin/delete-duplicate-admins?secret=YOUR_SETUP_SECRET` | Delete duplicate admin users — keeps `admin@shafaqatelier.pk`, deletes the rest. Useful for removing legacy `admin@laylamodest.pk`. |
+| `/api/admin/reset-admin-password?secret=YOUR_SETUP_SECRET` | Forcibly reset admin password to `Admin@123456`. |
+| `/api/admin/debug` | Diagnostic report — DB connection, tables, admin user, password verification, env vars. **No secret required.** |
 
 ## Troubleshooting
 

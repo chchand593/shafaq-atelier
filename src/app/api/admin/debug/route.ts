@@ -4,14 +4,35 @@ import bcrypt from "bcryptjs";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/admin/debug
-// No auth required — diagnostic only. Shows database connection, tables,
-// admin user, password verification, product counts, and environment info.
+// GET /api/admin/debug?secret=YOUR_SETUP_SECRET
+//
+// SECURITY: gated by SETUP_SECRET env var. This route leaks sensitive
+// information (admin email, password-hash prefix, bcrypt verification
+// result, env-var presence, schema status) and MUST NOT be public.
+// The secret check supports the bootstrap scenario where the admin
+// can't log in yet (so requireAdmin() would fail). Once SETUP_SECRET is
+// removed from Vercel env vars, this route returns 401 for everyone.
 
-export async function GET() {
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const secret = searchParams.get("secret");
+  const expected = process.env.SETUP_SECRET;
+  if (!expected || secret !== expected) {
+    return NextResponse.json(
+      {
+        error:
+          "Unauthorized — pass ?secret=YOUR_SETUP_SECRET (set SETUP_SECRET env var in Vercel).",
+      },
+      { status: 401, headers: { "Cache-Control": "no-store" } }
+    );
+  }
+
   const checks: { label: string; status: "ok" | "fail"; detail: string }[] = [];
   let adminDetails = "";
   let allAdmins = "";
+  // Use the actual secret the admin passed (so the action buttons work),
+  // falling back to a placeholder for documentation clarity.
+  const s = secret || "YOUR_SETUP_SECRET";
 
   // 1. Database connection
   try {
@@ -94,11 +115,13 @@ export async function GET() {
   }
 
   // 3b. List ALL admin users (check for duplicates)
+  let hasDuplicateAdmins = false;
   try {
     const admins = await db.user.findMany({
       where: { role: "admin" },
       select: { email: true, role: true, name: true },
     });
+    hasDuplicateAdmins = admins.length > 1;
     if (admins.length > 0) {
       const adminList = admins.map((a) => `${a.email} (${a.name})`).join(", ");
       checks.push({
@@ -106,11 +129,12 @@ export async function GET() {
         status: admins.length === 1 ? "ok" : "fail",
         detail: `${admins.length} admin(s): ${adminList}`,
       });
+      const canonicalFound = admins.some((a) => a.email.toLowerCase() === "admin@shafaqatelier.pk");
       allAdmins = `
         <div style="background:#f4f4f5;border-radius:8px;padding:16px;margin-top:12px;font-size:13px">
           <p><strong>Admin users (${admins.length}):</strong></p>
-          ${admins.map((a) => `<p>• ${a.email} — ${a.name} — role: ${a.role}</p>`).join("")}
-          ${admins.length > 1 ? '<p style="color:#ef4444;font-weight:600">⚠️ Duplicate admin users found!</p>' : ""}
+          ${admins.map((a) => `<p>• ${a.email} — ${a.name} — role: ${a.role}${a.email.toLowerCase() === "admin@shafaqatelier.pk" ? " (canonical)" : ""}</p>`).join("")}
+          ${admins.length > 1 ? `<p style="color:#ef4444;font-weight:600">⚠️ Duplicate admin users found!</p>${canonicalFound ? `<a href="${process.env.NEXTAUTH_URL || ""}/api/admin/delete-duplicate-admins?secret=${s}" style="display:inline-block;margin-top:8px;padding:8px 14px;background:#ef4444;color:#fff;border-radius:6px;text-decoration:none;font-size:13px;font-weight:600">🗑️ Delete Duplicate Admins Now →</a>` : '<p style="color:#666;font-size:12px">Note: canonical admin@shafaqatelier.pk not found — running delete-duplicate-admins would keep the oldest admin by createdAt.</p>'}` : ""}
         </div>`;
     }
   } catch {
@@ -248,7 +272,7 @@ export async function GET() {
          <p style="font-weight:600;margin:0 0 8px">❌ Password mismatch detected</p>
          <p style="margin:0 0 12px;font-size:14px">Reset the admin password by visiting:</p>
          <code style="display:block;background:#fff;padding:12px;border-radius:6px;font-size:13px;word-break:break-all">
-           ${base}/api/admin/reset-admin-password?secret=YOUR_SETUP_SECRET
+           ${base}/api/admin/reset-admin-password?secret=${s}
          </code>
        </div>`;
   } else if (!adminExists) {
@@ -256,20 +280,29 @@ export async function GET() {
            <p style="font-weight:600;margin:0 0 8px">⚠️ Admin user not found</p>
            <p style="margin:0 0 12px;font-size:14px">Run setup:</p>
            <code style="display:block;background:#fff;padding:12px;border-radius:6px;font-size:13px;word-break:break-all">
-             ${base}/api/admin/setup?secret=YOUR_SETUP_SECRET
+             ${base}/api/admin/setup?secret=${s}
            </code>
          </div>`;
   } else if (schemaNeedsFix) {
     actionHtml = `<div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:16px;margin-top:16px">
            <p style="font-weight:600;margin:0 0 8px">⚠️ Database schema is out of sync</p>
            <p style="margin:0 0 12px;font-size:14px">Some columns / tables are missing on the production database. Fix this with one click:</p>
-           <a href="${base}/api/admin/fix-schema?secret=YOUR_SETUP_SECRET" style="display:inline-block;padding:10px 18px;background:#1a1a1a;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;margin-bottom:12px">🔧 Fix Schema Now →</a>
+           <a href="${base}/api/admin/fix-schema?secret=${s}" style="display:inline-block;padding:10px 18px;background:#1a1a1a;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;margin-bottom:12px">🔧 Fix Schema Now →</a>
            <code style="display:block;background:#fff;padding:12px;border-radius:6px;font-size:13px;word-break:break-all">
-             ${base}/api/admin/fix-schema?secret=YOUR_SETUP_SECRET
+             ${base}/api/admin/fix-schema?secret=${s}
            </code>
            <p style="margin:12px 0 0;font-size:13px;color:#666">After the schema is fixed, run setup again to populate the new tables:</p>
            <code style="display:block;background:#fff;padding:12px;border-radius:6px;font-size:13px;word-break:break-all">
-             ${base}/api/admin/setup?secret=YOUR_SETUP_SECRET
+             ${base}/api/admin/setup?secret=${s}
+           </code>
+         </div>`;
+  } else if (hasDuplicateAdmins) {
+    actionHtml = `<div style="background:#fee2e2;border:1px solid #fecaca;border-radius:8px;padding:16px;margin-top:16px">
+           <p style="font-weight:600;margin:0 0 8px">⚠️ Duplicate admin users detected</p>
+           <p style="margin:0 0 12px;font-size:14px">Multiple admin users were found. Delete the duplicates (keep only <code>admin@shafaqatelier.pk</code>):</p>
+           <a href="${base}/api/admin/delete-duplicate-admins?secret=${s}" style="display:inline-block;padding:10px 18px;background:#ef4444;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;margin-bottom:12px">🗑️ Delete Duplicate Admins Now →</a>
+           <code style="display:block;background:#fff;padding:12px;border-radius:6px;font-size:13px;word-break:break-all">
+             ${base}/api/admin/delete-duplicate-admins?secret=${s}
            </code>
          </div>`;
   } else {

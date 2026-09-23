@@ -137,6 +137,15 @@ function QuickViewInner({ product }: { product: Product }) {
     setFraming(0);
   }, [product.id]);
 
+  // Reset framing index to 0 when the active color changes — otherwise
+  // switching from a color with N images to one with M < N images leaves
+  // framing pointing past the end of the new views array and the main
+  // image falls back to product.image. Mirrors the same fix in
+  // src/components/site/product-detail.tsx.
+  React.useEffect(() => {
+    setFraming(0);
+  }, [activeColor?.hex]);
+
   // track recently viewed whenever a new product is opened
   React.useEffect(() => {
     pushRecentlyViewed(product.id);

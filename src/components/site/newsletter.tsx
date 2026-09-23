@@ -12,7 +12,7 @@ export function Newsletter() {
     "idle"
   );
 
-  const onSubmit = (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       toast.error("Please enter a valid email", {
@@ -21,14 +21,33 @@ export function Newsletter() {
       return;
     }
     setStatus("loading");
-    // Frontend-only simulation; no backend wiring in this phase.
-    setTimeout(() => {
+    try {
+      const res = await fetch("/api/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, source: "homepage" }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        message?: string;
+      };
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "Subscription failed");
+      }
       setStatus("done");
       toast.success("Welcome to ShafaQ Atelier", {
         description: "Check your inbox for 10% off your first abaya.",
       });
       setEmail("");
-    }, 700);
+      // Reset the "Subscribed" button back to "Subscribe" after 3s so the
+      // form looks fresh if the user wants to sign up a second email.
+      setTimeout(() => setStatus("idle"), 3000);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Subscription failed";
+      toast.error("Could not subscribe", { description: msg });
+      setStatus("idle");
+    }
   };
 
   return (

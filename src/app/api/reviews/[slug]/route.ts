@@ -25,7 +25,7 @@ export async function GET(
   else if (sort === "lowest") orderBy = { rating: "asc" };
 
   const reviews = await db.review.findMany({
-    where: { productId: product.id },
+    where: { productId: product.id, approved: true },
     orderBy,
   });
 
@@ -116,6 +116,7 @@ export async function POST(
       title: title.trim().slice(0, 120),
       body: body.trim().slice(0, 1000),
       verified,
+      approved: false, // new reviews are hidden until an admin approves them
     },
   });
 
