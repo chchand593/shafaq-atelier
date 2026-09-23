@@ -77,7 +77,6 @@ export async function GET(
         color: it.color,
         colorName: it.colorName,
         size: it.size,
-        customization: it.customization ? JSON.parse(it.customization) : null,
         isCustom: it.productId.startsWith("custom-"),
       })),
     },

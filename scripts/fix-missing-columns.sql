@@ -31,6 +31,7 @@ BEGIN;
 ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "isNewArrival" BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "isBestSeller" BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "isFeatured"   BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "images"       TEXT    NOT NULL DEFAULT '[]';
 ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "colorImages"  TEXT    NOT NULL DEFAULT '[]';
 
 -- ---------------------------------------------------------------------------
@@ -141,6 +142,7 @@ SELECT
     (SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'Product' AND column_name = 'isNewArrival') AS has_isNewArrival,
     (SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'Product' AND column_name = 'isBestSeller') AS has_isBestSeller,
     (SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'Product' AND column_name = 'isFeatured')   AS has_isFeatured,
+    (SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'Product' AND column_name = 'images')       AS has_images,
     (SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'Product' AND column_name = 'colorImages')  AS has_colorImages;
 
 -- Missing tables now present?

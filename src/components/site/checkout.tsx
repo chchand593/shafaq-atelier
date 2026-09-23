@@ -786,7 +786,6 @@ function CheckoutInner() {
             color: l.color,
             colorName: l.colorName,
             size: l.size,
-            customization: l.customization ?? null,
           })),
           email: form.email,
           fullName: form.name,

@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
-  const filter = searchParams.get("filter") || "all"; // all | replied | unreplied | pending | approved | featured
+  const filter = searchParams.get("filter") || "all"; // all | replied | unreplied
 
   const reviews = await db.review.findMany({
     orderBy: { createdAt: "desc" },
@@ -23,9 +23,6 @@ export async function GET(request: Request) {
     .filter((r) => {
       if (filter === "replied") return r.adminReply !== null;
       if (filter === "unreplied") return r.adminReply === null;
-      if (filter === "pending") return r.approved === false;
-      if (filter === "approved") return r.approved === true;
-      if (filter === "featured") return r.featured === true;
       return true;
     })
     .map((r) => ({
@@ -35,8 +32,6 @@ export async function GET(request: Request) {
       title: r.title,
       body: r.body,
       verified: r.verified,
-      approved: r.approved,
-      featured: r.featured,
       helpful: r.helpful,
       adminReply: r.adminReply,
       adminReplyAt: r.adminReplyAt,
@@ -50,9 +45,6 @@ export async function GET(request: Request) {
     reviews: mapped,
     stats: {
       total: reviews.length,
-      pending: reviews.filter((r) => r.approved === false).length,
-      approved: reviews.filter((r) => r.approved === true).length,
-      featured: reviews.filter((r) => r.featured === true).length,
       replied: reviews.filter((r) => r.adminReply !== null).length,
       unreplied: reviews.filter((r) => r.adminReply === null).length,
     },

@@ -7,8 +7,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { formatPKR } from "@/lib/format";
 import { ProductCreateModal } from "@/components/site/product-create-modal";
-// AdminColorImagesModal removed — the AdminProductEditModal already covers
-// per-color 8–10 image management with reorder + primary + upload widget.
+import { AdminColorImagesModal } from "@/components/site/admin-color-images-modal";
 import { AdminProductEditModal } from "@/components/site/admin-product-edit-modal";
 import type { ColorImage, ColorOption } from "@/lib/site-data";
 import { toast } from "sonner";
@@ -46,6 +45,7 @@ export function AdminProducts() {
   const [deleteConfirm, setDeleteConfirm] = React.useState<string | null>(null);
   const [toggleConfirm, setToggleConfirm] = React.useState<{ slug: string; name: string; toActive: boolean } | null>(null);
   const [togglingSlug, setTogglingSlug] = React.useState<string | null>(null);
+  const [colorImagesProduct, setColorImagesProduct] = React.useState<AdminProduct | null>(null);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -299,10 +299,10 @@ export function AdminProducts() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => setEditProduct(p)}
+                          onClick={() => setColorImagesProduct(p)}
                           className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
-                          aria-label="Manage color images (opens Edit)"
-                          title="Manage color images (opens Edit)"
+                          aria-label="Manage color images"
+                          title="Manage color images"
                           disabled={(p.colorOptions?.length ?? 0) === 0}
                         >
                           <ImageIcon className="size-4" />
@@ -400,10 +400,21 @@ export function AdminProducts() {
         </div>
       ) : null}
 
-      {/* Edit modal — covers color-images editing too (8–10 images per
-          color, reorder, primary, upload widget). The standalone
-          AdminColorImagesModal was removed because it was destructive
-          (overwrote colorImages with only {image}, dropping images[]). */}
+      {/* Color images modal */}
+      {colorImagesProduct ? (
+        <AdminColorImagesModal
+          open={colorImagesProduct !== null}
+          onOpenChange={(o) => {
+            if (!o) setColorImagesProduct(null);
+          }}
+          productSlug={colorImagesProduct.id}
+          productName={colorImagesProduct.name}
+          colorOptions={colorImagesProduct.colorOptions ?? []}
+          onSaved={() => void load()}
+        />
+      ) : null}
+
+      {/* Edit modal */}
       <AdminProductEditModal
         open={editProduct !== null}
         onOpenChange={(o) => {

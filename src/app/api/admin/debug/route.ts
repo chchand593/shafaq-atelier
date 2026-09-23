@@ -30,8 +30,8 @@ export async function GET(request: Request) {
   const checks: { label: string; status: "ok" | "fail"; detail: string }[] = [];
   let adminDetails = "";
   let allAdmins = "";
-  // Use the actual secret the admin passed (so the action buttons work),
-  // falling back to a placeholder for documentation clarity.
+  // Use the actual secret the admin passed (so the action buttons in the
+  // HTML report work), falling back to a placeholder for documentation clarity.
   const s = secret || "YOUR_SETUP_SECRET";
 
   // 1. Database connection

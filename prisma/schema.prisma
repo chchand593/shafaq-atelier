@@ -90,43 +90,36 @@ model Order {
 }
 
 model OrderItem {
-  id             String  @id @default(cuid())
-  orderId        String
-  order          Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  productId      String
-  name           String
-  image          String
-  price          Int
-  qty            Int
-  color          String
-  colorName      String
-  size           String
-  // For custom-abaya orders: full customization details (style, fabric,
-  // sleeves, hijab, embroidery, details, measurements, referenceImage,
-  // instructions) serialised as JSON. Null for regular catalog items.
-  customization  String?
+  id        String  @id @default(cuid())
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  name      String
+  image     String
+  price     Int
+  qty       Int
+  color     String
+  colorName String
+  size      String
 }
 
 model Review {
-  id           String   @id @default(cuid())
-  productId    String
-  product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  userId       String?
-  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  authorName   String
-  rating       Int      // 1-5
-  title        String
-  body         String
-  verified     Boolean  @default(false) // true if author has purchased the product
-  approved     Boolean  @default(false) // admin must approve before public display
-  featured     Boolean  @default(false) // admin can feature this review
-  helpful      Int      @default(0)
-  adminReply   String?
+  id          String   @id @default(cuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  authorName  String
+  rating      Int      // 1-5
+  title       String
+  body        String
+  verified    Boolean  @default(false) // true if author has purchased the product
+  helpful     Int      @default(0)
+  adminReply  String?
   adminReplyAt DateTime?
-  createdAt    DateTime @default(now())
+  createdAt   DateTime @default(now())
 
   @@index([productId])
-  @@index([approved])
 }
 
 model WishlistItem {
@@ -170,21 +163,6 @@ model PointTransaction {
   createdAt   DateTime @default(now())
 
   @@index([userId])
-}
-
-// Newsletter subscribers — collected from the homepage footer form.
-// Idempotent on email (unique). Admin can export the list from the
-// settings page.
-model NewsletterSubscriber {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  active    Boolean  @default(true)
-  source    String   @default("homepage") // homepage | checkout | manual
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([active])
 }
 
 // Singleton row (id = "default") holding editable store configuration.

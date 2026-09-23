@@ -30,7 +30,6 @@ export async function POST(request: Request) {
         color: string;
         colorName: string;
         size: string;
-        customization?: string | null;
       }>;
       email: string;
       fullName: string;
@@ -279,7 +278,6 @@ export async function POST(request: Request) {
               color: it.color,
               colorName: it.colorName,
               size: it.size,
-              customization: it.customization ?? null,
             })),
           },
         },
