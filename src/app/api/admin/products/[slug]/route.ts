@@ -84,6 +84,24 @@ export async function DELETE(
   }
 
   const { slug } = await params;
+
+  // Fix #10: Safety guard — if this product is referenced by any existing
+  // OrderItem, do NOT permanently delete it (would break order history /
+  // reporting). Return 409 and tell the admin to deactivate instead.
+  const referencedByOrder = await db.orderItem.findFirst({
+    where: { productId: slug },
+    select: { orderId: true },
+  });
+  if (referencedByOrder) {
+    return NextResponse.json(
+      {
+        error:
+          "Cannot delete this product because it is referenced by existing orders. Deactivate it instead to hide it from the storefront while preserving order history.",
+      },
+      { status: 409 }
+    );
+  }
+
   await db.product.delete({ where: { slug } });
 
   // Bust caches so the deleted product disappears from every customer-facing

@@ -101,6 +101,10 @@ model OrderItem {
   color     String
   colorName String
   size      String
+  // For custom-abaya orders: full customization details (style, fabric,
+  // sleeves, hijab, embroidery, details, measurements, referenceImage,
+  // instructions) serialised as JSON. Null for regular catalog items.
+  customization String?
 }
 
 model Review {
@@ -114,12 +118,15 @@ model Review {
   title       String
   body        String
   verified    Boolean  @default(false) // true if author has purchased the product
+  approved    Boolean  @default(true)  // admin moderation gate; default true so existing reviews stay visible
+  featured    Boolean  @default(false) // admin can feature this review
   helpful     Int      @default(0)
   adminReply  String?
   adminReplyAt DateTime?
   createdAt   DateTime @default(now())
 
   @@index([productId])
+  @@index([approved])
 }
 
 model WishlistItem {

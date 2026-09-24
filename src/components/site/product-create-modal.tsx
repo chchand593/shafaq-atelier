@@ -50,11 +50,16 @@ type ProductForm = {
   care: string;
   description: string;
   stock: string;
+  lowStockThreshold: string;
   colors: ColorOption[];
   // Per-color image URLs keyed by lowercased hex. The first URL becomes the
   // color's primary `image`; the rest go into the `images` array.
   colorImages: Record<string, string[]>;
   sizes: string[];
+  // Fix #7: Feature flags so admin can set them at creation time.
+  isNewArrival: boolean;
+  isBestSeller: boolean;
+  isFeatured: boolean;
 };
 
 const EMPTY_FORM: ProductForm = {
@@ -68,9 +73,13 @@ const EMPTY_FORM: ProductForm = {
   care: "",
   description: "",
   stock: "50",
+  lowStockThreshold: "5",
   colors: [{ hex: "#1a1a1a", name: "Black" }],
   colorImages: {},
   sizes: [...ALL_SIZES],
+  isNewArrival: false,
+  isBestSeller: false,
+  isFeatured: false,
 };
 
 export function ProductCreateModal({
@@ -329,6 +338,13 @@ export function ProductCreateModal({
           care: form.care.trim(),
           description: form.description.trim(),
           stock: Number(form.stock) || 0,
+          // Fix #7: Send feature flags so newly created products can appear
+          // in New Arrivals / Best Sellers / Featured immediately.
+          isNewArrival: form.isNewArrival,
+          isBestSeller: form.isBestSeller,
+          isFeatured: form.isFeatured,
+          // Fix #16: Support lowStockThreshold on creation.
+          lowStockThreshold: Number(form.lowStockThreshold) || 5,
         }),
       });
       const data = (await res.json()) as { ok?: boolean; error?: string };

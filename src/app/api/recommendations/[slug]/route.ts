@@ -11,6 +11,7 @@ function mapProduct(p: {
   price: number;
   originalPrice: number | null;
   image: string;
+  images: string;
   colors: string;
   sizes: string;
   colorImages: string;
@@ -32,9 +33,11 @@ function mapProduct(p: {
     price: p.price,
     originalPrice: p.originalPrice ?? undefined,
     image: p.image,
-    colors: (JSON.parse(p.colors) as ColorOption[]).map((c) => c.hex),
-    colorOptions: JSON.parse(p.colors) as ColorOption[],
-    sizes: JSON.parse(p.sizes) as string[],
+    // Fix #11: Include the multi-image gallery array (was missing).
+    images: JSON.parse(p.images || "[]") as string[],
+    colors: (JSON.parse(p.colors || "[]") as ColorOption[]).map((c) => c.hex),
+    colorOptions: JSON.parse(p.colors || "[]") as ColorOption[],
+    sizes: JSON.parse(p.sizes || "[]") as string[],
     colorImages: JSON.parse(p.colorImages || "[]") as ColorImage[],
     rating: p.rating,
     reviews: p.reviewCount,

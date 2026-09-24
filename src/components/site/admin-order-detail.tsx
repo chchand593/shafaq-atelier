@@ -64,6 +64,29 @@ type OrderItem = {
   colorName: string;
   size: string;
   isCustom: boolean;
+  // For custom-abaya orders: full customization payload parsed from the
+  // OrderItem.customization JSON column (set by /api/admin/orders/[id]).
+  customization?: CustomizationPayload | null;
+};
+
+// Shape of the customization JSON stored on OrderItem.customization for
+// custom-abaya orders. Built by src/components/site/custom-abaya-builder.tsx
+// in onAddToCart and persisted through cart → checkout → /api/orders.
+type CustomizationPayload = {
+  style?: { id: string; name: string; additionalPrice: number } | null;
+  abayaStyle?: { id: string; name: string; slug: string } | null;
+  fabric?: { id: string; name: string; additionalPrice: number } | null;
+  color?: { hex: string; name: string } | null;
+  sleeves?: { id: string; name: string; additionalPrice: number } | null;
+  hijab?: { id: string; name: string; additionalPrice: number } | null;
+  embroidery?: { id: string; name: string; additionalPrice: number } | null;
+  details?: Array<{ id: string; name: string; additionalPrice: number }>;
+  measurements?: Record<string, string>;
+  referenceImage?: { name: string | null; dataUriLength: number; hasImage: boolean } | null;
+  instructions?: string;
+  basePrice?: number;
+  additions?: number;
+  total?: number;
 };
 
 type OrderDetail = {
@@ -96,18 +119,13 @@ type OrderDetail = {
   items: OrderItem[];
 };
 
-// Parse custom abaya measurements from the "size" field
-// Format: "Custom (height: 165, bust: 94, waist: 76, ...)"
-function parseCustomMeasurements(sizeField: string): Record<string, string> | null {
-  const match = sizeField.match(/Custom\s*\((.*)\)/);
-  if (!match) return null;
-  const measurements: Record<string, string> = {};
-  match[1].split(", ").forEach((pair) => {
-    const [key, val] = pair.split(": ");
-    if (key && val) measurements[key.trim()] = val.trim();
-  });
-  return Object.keys(measurements).length > 0 ? measurements : null;
-}
+// Note: customization is now parsed by the API (/api/admin/orders/[id]
+// line 80: `customization: it.customization ? JSON.parse(it.customization) : null`)
+// and rendered directly from it.customization in the item card below.
+// The old parseCustomMeasurements(size) helper was removed because the
+// customizer sends size: "Custom" (not "Custom (key: val, ...)") so the
+// regex never matched and measurements were always null.
+
 
 export function AdminOrderDetail({ orderNumber }: { orderNumber: string }) {
   const [order, setOrder] = React.useState<OrderDetail | null>(null);
@@ -338,7 +356,20 @@ export function AdminOrderDetail({ orderNumber }: { orderNumber: string }) {
         <h3 className="eyebrow text-[var(--mocha)]">Order Items</h3>
         <div className="mt-3 space-y-3">
           {order.items.map((it) => {
-            const measurements = it.isCustom ? parseCustomMeasurements(it.size) : null;
+            const c = it.customization;
+            // Build the list of selected customization options to show as pills.
+            const configPills: Array<{ label: string; value: string }> = [];
+            if (c?.style?.name) configPills.push({ label: "Style", value: c.style.name });
+            if (c?.fabric?.name) configPills.push({ label: "Fabric", value: c.fabric.name });
+            if (c?.color?.name) configPills.push({ label: "Color", value: c.color.name });
+            if (c?.sleeves?.name) configPills.push({ label: "Sleeves", value: c.sleeves.name });
+            if (c?.hijab?.name) configPills.push({ label: "Hijab", value: c.hijab.name });
+            if (c?.embroidery?.name) configPills.push({ label: "Embroidery", value: c.embroidery.name });
+            if (c?.details && c.details.length > 0) {
+              configPills.push({ label: "Add-ons", value: c.details.map((d) => d.name).join(", ") });
+            }
+            const measurements = c?.measurements ?? null;
+            const hasRefImage = c?.referenceImage?.hasImage === true;
             return (
               <div key={it.id} className="rounded-xl border bg-card p-4 shadow-sm">
                 <div className="flex gap-4">
@@ -372,8 +403,48 @@ export function AdminOrderDetail({ orderNumber }: { orderNumber: string }) {
                           Customized Abaya — Production Details
                         </p>
 
+                        {/* Configuration pills (style / fabric / color / sleeves / hijab / embroidery / add-ons) */}
+                        {configPills.length > 0 ? (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {configPills.map((p) => (
+                              <span
+                                key={p.label}
+                                className="rounded-full border border-[var(--gold)]/20 bg-background px-3 py-1 text-xs"
+                              >
+                                <span className="text-muted-foreground">{p.label}:</span>{" "}
+                                <span className="font-medium">{p.value}</span>
+                              </span>
+                            ))}
+                            <span className="rounded-full border border-[var(--gold)]/20 bg-background px-3 py-1 text-xs">
+                              <span className="text-muted-foreground">Qty:</span>{" "}
+                              <span className="font-medium">{it.qty}</span>
+                            </span>
+                            <span className="rounded-full border border-[var(--gold)]/20 bg-background px-3 py-1 text-xs">
+                              <span className="text-muted-foreground">Made-to-Order</span>
+                            </span>
+                          </div>
+                        ) : null}
+
+                        {/* Pricing breakdown (base + additions = total) */}
+                        {c && typeof c.basePrice === "number" ? (
+                          <div className="mt-3 grid gap-1.5 text-xs sm:grid-cols-3">
+                            <div className="rounded-md border border-[var(--gold)]/10 bg-background px-2.5 py-1.5">
+                              <span className="text-[0.65rem] uppercase tracking-wider text-muted-foreground">Base Price</span>
+                              <p className="font-medium">{formatPKR(c.basePrice)}</p>
+                            </div>
+                            <div className="rounded-md border border-[var(--gold)]/10 bg-background px-2.5 py-1.5">
+                              <span className="text-[0.65rem] uppercase tracking-wider text-muted-foreground">Additions</span>
+                              <p className="font-medium">{formatPKR(c.additions ?? 0)}</p>
+                            </div>
+                            <div className="rounded-md border border-[var(--gold)]/20 bg-[var(--gold)]/10 px-2.5 py-1.5">
+                              <span className="text-[0.65rem] uppercase tracking-wider text-muted-foreground">Unit Total</span>
+                              <p className="font-semibold">{formatPKR(c.total ?? it.price)}</p>
+                            </div>
+                          </div>
+                        ) : null}
+
                         {/* Measurements */}
-                        {measurements ? (
+                        {measurements && Object.keys(measurements).length > 0 ? (
                           <div className="mt-3">
                             <p className="text-[0.65rem] uppercase tracking-wider text-[var(--mocha)]">Measurements (cm)</p>
                             <div className="mt-2 grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
@@ -387,39 +458,41 @@ export function AdminOrderDetail({ orderNumber }: { orderNumber: string }) {
                           </div>
                         ) : null}
 
-                        {/* Config summary */}
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <span className="rounded-full border border-[var(--gold)]/20 bg-background px-3 py-1 text-xs">
-                            Color: {it.colorName}
-                          </span>
-                          <span className="rounded-full border border-[var(--gold)]/20 bg-background px-3 py-1 text-xs">
-                            Qty: {it.qty}
-                          </span>
-                          <span className="rounded-full border border-[var(--gold)]/20 bg-background px-3 py-1 text-xs">
-                            Custom Price: {formatPKR(it.price)}
-                          </span>
-                          <span className="rounded-full border border-[var(--gold)]/20 bg-background px-3 py-1 text-xs">
-                            Made-to-Order (No Stock)
-                          </span>
-                        </div>
-
                         {/* Reference image */}
-                        {it.image ? (
+                        {hasRefImage ? (
                           <div className="mt-3">
                             <p className="text-[0.65rem] uppercase tracking-wider text-[var(--mocha)]">Reference Image</p>
+                            <div className="mt-2 rounded-md border border-[var(--gold)]/20 bg-background px-3 py-2 text-xs">
+                              <span className="text-muted-foreground">Uploaded:</span>{" "}
+                              <span className="font-medium">{c?.referenceImage?.name || "reference-image"}</span>
+                              {c?.referenceImage?.dataUriLength ? (
+                                <span className="text-muted-foreground">
+                                  {" "}· {Math.round((c.referenceImage.dataUriLength * 3) / 4 / 1024)} KB
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+                        ) : it.image ? (
+                          <div className="mt-3">
+                            <p className="text-[0.65rem] uppercase tracking-wider text-[var(--mocha)]">Style Preview</p>
                             <div className="mt-2 inline-block">
                               <img
                                 src={it.image}
-                                alt="Custom abaya reference"
+                                alt="Custom abaya style preview"
                                 className="max-h-32 rounded-md border border-[var(--gold)]/20 object-cover"
                               />
                             </div>
                           </div>
                         ) : null}
 
-                        {/* Raw size field for any special instructions */}
-                        {it.size && it.size.length > 0 && !measurements ? (
-                          <p className="mt-3 text-xs text-muted-foreground">{it.size}</p>
+                        {/* Customer instructions */}
+                        {c?.instructions && c.instructions.trim().length > 0 ? (
+                          <div className="mt-3">
+                            <p className="text-[0.65rem] uppercase tracking-wider text-[var(--mocha)]">Special Instructions</p>
+                            <p className="mt-1 rounded-md border border-[var(--gold)]/10 bg-background px-3 py-2 text-sm">
+                              {c.instructions}
+                            </p>
+                          </div>
                         ) : null}
                       </div>
                     ) : null}

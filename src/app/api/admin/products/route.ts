@@ -96,6 +96,8 @@ export async function POST(request: Request) {
     care: string;
     description: string;
     stock?: number;
+    // Fix #16: Accept lowStockThreshold on creation (defaults to 5).
+    lowStockThreshold?: number;
     isNewArrival?: boolean;
     isBestSeller?: boolean;
     isFeatured?: boolean;
@@ -132,6 +134,8 @@ export async function POST(request: Request) {
       care: body.care || "",
       description: body.description || "",
       stock: body.stock ?? 50,
+      // Fix #16: Persist lowStockThreshold (defaults to 5 if not sent).
+      lowStockThreshold: body.lowStockThreshold ?? 5,
       active: true,
       isNewArrival: body.isNewArrival ?? false,
       isBestSeller: body.isBestSeller ?? false,

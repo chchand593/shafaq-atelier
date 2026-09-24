@@ -24,8 +24,10 @@ export async function GET(
   else if (sort === "highest") orderBy = { rating: "desc" };
   else if (sort === "lowest") orderBy = { rating: "asc" };
 
+  // Fix #4: Public reviews should ONLY show approved reviews. Unapproved
+  // (pending moderation) reviews are hidden from customers.
   const reviews = await db.review.findMany({
-    where: { productId: product.id },
+    where: { productId: product.id, approved: true },
     orderBy,
   });
 
@@ -116,6 +118,9 @@ export async function POST(
       title: title.trim().slice(0, 120),
       body: body.trim().slice(0, 1000),
       verified,
+      // Fix #4: New reviews start as unapproved (pending moderation).
+      // Admin must approve before they appear publicly.
+      approved: false,
     },
   });
 

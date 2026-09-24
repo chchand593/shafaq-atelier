@@ -20,6 +20,9 @@ import {
 } from "lucide-react";
 import { formatPKR, formatPKRShort } from "@/lib/format";
 import { cn } from "@/lib/utils";
+// Fix #13: Show a toast when dashboard data fetch fails instead of
+// silently swallowing the error.
+import { toast } from "sonner";
 
 type StatCard = {
   icon: typeof Package;
@@ -111,8 +114,14 @@ export function AdminOverview() {
           setAnalytics(an);
         }
       )
-      .catch(() => {
-        // best-effort
+      .catch((err) => {
+        // Fix #13: Don't silently swallow dashboard fetch errors — show
+        // a toast so the admin knows something went wrong (expired session,
+        // DB error, network issue).
+        console.error("[admin-overview] failed to load dashboard data", err);
+        toast.error("Failed to load dashboard data", {
+          description: "Please refresh the page or re-login if the problem persists.",
+        });
       })
       .finally(() => setLoading(false));
   }, []);

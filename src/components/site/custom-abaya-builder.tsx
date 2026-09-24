@@ -709,6 +709,58 @@ function Builder({ data }: { data: BuilderData; retry: () => void }) {
       image = primary?.url || styleImages[0]?.url || "/images/custom.jpg";
     }
 
+    // Build a complete customization payload so the order line preserves
+    // every choice the customer made (style, fabric, sleeves, hijab,
+    // embroidery, details, measurements, referenceImage, instructions).
+    // This is what the admin sees in the order detail view.
+    const styleOpt = data.styleOptions.find((o) => o.id === config.style) ?? null;
+    const selectedSleeve = data.sleevesOptions.find((o) => o.id === config.sleeves) ?? null;
+    const selectedHijab = data.hijabOptions.find((o) => o.id === config.hijab) ?? null;
+    const selectedEmbroidery = data.embroideryOptions.find((o) => o.id === config.embroidery) ?? null;
+    const selectedDetails = config.details
+      .map((id) => data.detailsOptions.find((o) => o.id === id))
+      .filter((o): o is NonNullable<typeof o> => o !== undefined);
+
+    const customizationPayload = {
+      style: styleOpt
+        ? { id: styleOpt.id, name: styleOpt.name, additionalPrice: styleOpt.additionalPrice }
+        : null,
+      abayaStyle: selectedStyle
+        ? { id: selectedStyle.id, name: selectedStyle.name, slug: selectedStyle.slug }
+        : null,
+      fabric: selectedFabric
+        ? { id: selectedFabric.id, name: selectedFabric.name, additionalPrice: selectedFabric.additionalPrice }
+        : null,
+      color: color ? { hex: color.hex, name: color.name } : null,
+      sleeves: selectedSleeve
+        ? { id: selectedSleeve.id, name: selectedSleeve.name, additionalPrice: selectedSleeve.additionalPrice }
+        : null,
+      hijab: selectedHijab
+        ? { id: selectedHijab.id, name: selectedHijab.name, additionalPrice: selectedHijab.additionalPrice }
+        : null,
+      embroidery: selectedEmbroidery
+        ? { id: selectedEmbroidery.id, name: selectedEmbroidery.name, additionalPrice: selectedEmbroidery.additionalPrice }
+        : null,
+      details: selectedDetails.map((d) => ({
+        id: d.id,
+        name: d.name,
+        additionalPrice: d.additionalPrice,
+      })),
+      measurements: config.measurements,
+      referenceImage: config.referenceImage
+        ? {
+            name: config.referenceImageName,
+            dataUriLength: config.referenceImage.length,
+            hasImage: true,
+          }
+        : null,
+      instructions: config.instructions || "",
+      basePrice: data.basePrice,
+      additions: total - data.basePrice,
+      total: total,
+    };
+    const customizationJson = JSON.stringify(customizationPayload);
+
     addToCart({
       productId: customId,
       name: "Custom Abaya",
@@ -718,6 +770,7 @@ function Builder({ data }: { data: BuilderData; retry: () => void }) {
       colorName: color?.name || "Custom",
       size: "Custom",
       qty: 1,
+      customization: customizationJson,
     });
 
     toast.success("Custom abaya added to your bag", {

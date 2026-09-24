@@ -147,6 +147,18 @@ CREATE TABLE IF NOT EXISTS "NewsletterSubscriber" (
 CREATE UNIQUE INDEX IF NOT EXISTS "NewsletterSubscriber_email_key" ON "NewsletterSubscriber"("email");
 CREATE INDEX IF NOT EXISTS "NewsletterSubscriber_active_idx" ON "NewsletterSubscriber"("active");
 
+-- ---------------------------------------------------------------------------
+-- 8. Add OrderItem.customization column (JSON for custom abaya details)
+-- ---------------------------------------------------------------------------
+ALTER TABLE "OrderItem" ADD COLUMN IF NOT EXISTS "customization" TEXT;
+
+-- ---------------------------------------------------------------------------
+-- 9. Add Review.approved + Review.featured columns (moderation gate)
+-- ---------------------------------------------------------------------------
+ALTER TABLE "Review" ADD COLUMN IF NOT EXISTS "approved" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "Review" ADD COLUMN IF NOT EXISTS "featured" BOOLEAN NOT NULL DEFAULT false;
+CREATE INDEX IF NOT EXISTS "Review_approved_idx" ON "Review"("approved");
+
 COMMIT;
 
 -- ============================================================================
@@ -154,13 +166,19 @@ COMMIT;
 -- All four queries should return > 0.
 -- ============================================================================
 
--- Missing columns now present?
+-- Missing Product columns now present?
 SELECT
     (SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'Product' AND column_name = 'isNewArrival') AS has_isNewArrival,
     (SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'Product' AND column_name = 'isBestSeller') AS has_isBestSeller,
     (SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'Product' AND column_name = 'isFeatured')   AS has_isFeatured,
     (SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'Product' AND column_name = 'images')       AS has_images,
     (SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'Product' AND column_name = 'colorImages')  AS has_colorImages;
+
+-- New OrderItem + Review columns now present?
+SELECT
+    (SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'OrderItem' AND column_name = 'customization') AS has_OrderItem_customization,
+    (SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'Review' AND column_name = 'approved') AS has_Review_approved,
+    (SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'Review' AND column_name = 'featured') AS has_Review_featured;
 
 -- Missing tables now present?
 SELECT

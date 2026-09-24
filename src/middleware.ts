@@ -30,9 +30,16 @@ export async function middleware(request: NextRequest) {
   }
 
   // Get the NextAuth JWT token from the request
+  // IMPORTANT: auth.ts overrides the session cookie name to
+  // "next-auth.session-token" (no __Secure- prefix) so SameSite=None
+  // cookies work in the Z.ai preview iframe. Without this explicit
+  // cookieName, getToken defaults to "__Secure-next-auth.session-token"
+  // on Vercel/HTTPS and never finds the actual cookie — breaking
+  // /admin/* access for valid admin sessions in production.
   const token = await getToken({
     req: request,
     secret: resolveNextAuthSecret(),
+    cookieName: "next-auth.session-token",
   });
 
   // Unauthenticated → redirect to home

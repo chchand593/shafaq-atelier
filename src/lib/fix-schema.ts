@@ -336,7 +336,35 @@ export async function runFixSchema(): Promise<FixStep[]> {
       ]
   ));
 
-  // --- 12. Admin user deduplication ---
+  // --- 12. OrderItem.customization column (JSON for custom abaya details) ---
+  steps.push(
+    await addColumnStep("OrderItem", "customization", pg
+      ? `ALTER TABLE "OrderItem" ADD COLUMN IF NOT EXISTS "customization" TEXT;`
+      : `ALTER TABLE "OrderItem" ADD COLUMN "customization" TEXT;`
+    )
+  );
+
+  // --- 13. Review.approved + Review.featured columns ---
+  steps.push(
+    await addColumnStep("Review", "approved", pg
+      ? `ALTER TABLE "Review" ADD COLUMN IF NOT EXISTS "approved" BOOLEAN NOT NULL DEFAULT true;`
+      : `ALTER TABLE "Review" ADD COLUMN "approved" BOOLEAN NOT NULL DEFAULT 1;`
+    )
+  );
+  steps.push(
+    await addColumnStep("Review", "featured", pg
+      ? `ALTER TABLE "Review" ADD COLUMN IF NOT EXISTS "featured" BOOLEAN NOT NULL DEFAULT false;`
+      : `ALTER TABLE "Review" ADD COLUMN "featured" BOOLEAN NOT NULL DEFAULT 0;`
+    )
+  );
+  // Add index for the new approved column (Postgres only; SQLite auto-indexes)
+  if (pg) {
+    try {
+      await exec(`CREATE INDEX IF NOT EXISTS "Review_approved_idx" ON "Review"("approved");`);
+    } catch { /* ignore */ }
+  }
+
+  // --- 14. Admin user deduplication ---
   // Production had 2 admin users (duplicate from older setup scripts).
   // Keep the canonical admin@shafaqatelier.pk; if missing, keep the first
   // admin by createdAt; delete the rest.

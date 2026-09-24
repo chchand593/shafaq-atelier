@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import type { ColorOption } from "@/lib/site-data";
+import type { ColorImage, ColorOption } from "@/lib/site-data";
 
 export const dynamic = "force-dynamic";
 
@@ -29,11 +29,18 @@ export async function GET() {
       price: p.price,
       originalPrice: p.originalPrice ?? undefined,
       image: p.image,
-      colors: (JSON.parse(p.colors) as ColorOption[]).map((c) => c.hex),
-      colorOptions: JSON.parse(p.colors) as ColorOption[],
-      sizes: JSON.parse(p.sizes) as string[],
+      // Fix #14: Include images, colorImages, stock, lowStockThreshold,
+      // and active so wishlist items have the full product shape.
+      images: JSON.parse(p.images || "[]") as string[],
+      colorImages: JSON.parse(p.colorImages || "[]") as ColorImage[],
+      colors: (JSON.parse(p.colors || "[]") as ColorOption[]).map((c) => c.hex),
+      colorOptions: JSON.parse(p.colors || "[]") as ColorOption[],
+      sizes: JSON.parse(p.sizes || "[]") as string[],
       rating: p.rating,
       reviews: p.reviewCount,
+      stock: p.stock,
+      lowStockThreshold: p.lowStockThreshold,
+      active: p.active,
       badge: p.badge ?? undefined,
       fabric: p.fabric,
       care: p.care,

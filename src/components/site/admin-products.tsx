@@ -10,6 +10,9 @@ import { ProductCreateModal } from "@/components/site/product-create-modal";
 import { AdminColorImagesModal } from "@/components/site/admin-color-images-modal";
 import { AdminProductEditModal } from "@/components/site/admin-product-edit-modal";
 import type { ColorImage, ColorOption } from "@/lib/site-data";
+// Fix #6: invalidateProductsCache busts the customer-side module-level
+// product cache so storefront pages reflect admin mutations immediately.
+import { invalidateProductsCache } from "@/lib/use-products";
 import { toast } from "sonner";
 
 type AdminProduct = {
@@ -91,6 +94,7 @@ export function AdminProducts() {
         description: `${toggleConfirm.name} is now ${toggleConfirm.toActive ? "visible" : "hidden"} from customers.`,
       });
       setToggleConfirm(null);
+      invalidateProductsCache();
       void load();
     } catch {
       toast.error("Failed to update product status");
@@ -111,6 +115,7 @@ export function AdminProducts() {
       toast.success(!p.active ? "Product activated" : "Product deactivated", {
         description: `${p.name} is now ${!p.active ? "visible" : "hidden"} from customers.`,
       });
+      invalidateProductsCache();
       void load();
     } catch {
       toast.error("Failed to update product status");
@@ -125,6 +130,7 @@ export function AdminProducts() {
       if (!res.ok) throw new Error();
       toast.success("Product deleted", { description: slug });
       setDeleteConfirm(null);
+      invalidateProductsCache();
       void load();
     } catch {
       toast.error("Failed to delete product");
@@ -410,7 +416,7 @@ export function AdminProducts() {
           productSlug={colorImagesProduct.id}
           productName={colorImagesProduct.name}
           colorOptions={colorImagesProduct.colorOptions ?? []}
-          onSaved={() => void load()}
+          onSaved={() => { invalidateProductsCache(); void load(); }}
         />
       ) : null}
 
@@ -421,14 +427,14 @@ export function AdminProducts() {
           if (!o) setEditProduct(null);
         }}
         product={editProduct}
-        onSaved={() => void load()}
+        onSaved={() => { invalidateProductsCache(); void load(); }}
       />
 
       {/* Create modal */}
       <ProductCreateModal
         open={createOpen}
         onOpenChange={setCreateOpen}
-        onCreated={() => void load()}
+        onCreated={() => { invalidateProductsCache(); void load(); }}
       />
     </div>
   );

@@ -117,7 +117,10 @@ function QuickViewInner({ product }: { product: Product }) {
   const pushRecentlyViewed = useRecentlyViewed((s) => s.push);
   const { products: allProducts } = useApiProducts();
 
-  const [activeColor, setActiveColor] = React.useState(product.colorOptions[0]);
+  // Fix #15: null-safe fallback for products with no color options.
+  const [activeColor, setActiveColor] = React.useState(
+    product.colorOptions[0] ?? { hex: "#1a1a1a", name: "Default" }
+  );
   const [activeSize, setActiveSize] = React.useState<string | null>(null);
   const [qty, setQty] = React.useState(1);
   const [framing, setFraming] = React.useState(0);
@@ -131,11 +134,20 @@ function QuickViewInner({ product }: { product: Product }) {
 
   // reset selections when product changes
   React.useEffect(() => {
-    setActiveColor(product.colorOptions[0]);
+    setActiveColor(product.colorOptions[0] ?? { hex: "#1a1a1a", name: "Default" });
     setActiveSize(null);
     setQty(1);
     setFraming(0);
   }, [product.id]);
+
+  // Fix #5: Reset framing index to 0 when the active color changes — otherwise
+  // switching from a color with N images to one with M < N images leaves
+  // framing pointing past the end of the new views array and the main
+  // image falls back to product.image. Mirrors the same fix in
+  // src/components/site/product-detail.tsx.
+  React.useEffect(() => {
+    setFraming(0);
+  }, [activeColor?.hex]);
 
   // track recently viewed whenever a new product is opened
   React.useEffect(() => {
