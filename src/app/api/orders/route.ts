@@ -135,13 +135,95 @@ export async function POST(request: Request) {
     });
     const catalogMap = new Map(catalogProducts.map((p) => [p.slug, p]));
 
+    // Fix #2: For custom abayas, re-derive the price server-side from the
+    // customization JSON + current DB-backed option prices. Never trust
+    // the client-supplied price. Validate that each selected option ID is
+    // active in the database.
+    const [allOptions, allFabrics, storeSettings] = await Promise.all([
+      db.customizationOption.findMany({
+        where: { active: true },
+        select: { id: true, additionalPrice: true, optionType: true, name: true },
+      }),
+      db.fabric.findMany({
+        where: { active: true },
+        select: { id: true, additionalPrice: true, name: true },
+      }),
+      db.storeSettings.findUnique({
+        where: { id: "default" },
+        select: { customAbayaBasePrice: true },
+      }),
+    ]);
+    const optionMap = new Map(allOptions.map((o) => [o.id, o]));
+    const fabricMap = new Map(allFabrics.map((f) => [f.id, f]));
+    const serverBasePrice = storeSettings?.customAbayaBasePrice ?? 15000;
+
     let subtotal = 0;
     const validatedItems = body.items.map((it) => {
-      // Custom abayas use "custom-{timestamp}" productId — trust the client price
-      // since there's no catalog entry for bespoke items. No stock check.
+      // Custom abayas — server-side price re-derivation from DB
       if (it.productId.startsWith("custom-")) {
-        subtotal += it.price * it.qty;
-        return it;
+        let serverPrice = serverBasePrice;
+        let validationError: string | null = null;
+
+        if (it.customization) {
+          try {
+            const c = JSON.parse(it.customization) as {
+              style?: { id?: string; additionalPrice?: number } | null;
+              fabric?: { id?: string; additionalPrice?: number } | null;
+              sleeves?: { id?: string; additionalPrice?: number } | null;
+              hijab?: { id?: string; additionalPrice?: number } | null;
+              embroidery?: { id?: string; additionalPrice?: number } | null;
+              details?: Array<{ id?: string; additionalPrice?: number }>;
+            };
+
+            // Validate + re-derive each option from the DB
+            if (c.style?.id) {
+              const opt = optionMap.get(c.style.id);
+              if (!opt) validationError = "Selected style is no longer available.";
+              else serverPrice += opt.additionalPrice;
+            }
+            if (c.fabric?.id) {
+              const fab = fabricMap.get(c.fabric.id);
+              if (!fab) validationError = "Selected fabric is no longer available.";
+              else serverPrice += fab.additionalPrice;
+            }
+            if (c.sleeves?.id) {
+              const opt = optionMap.get(c.sleeves.id);
+              if (!opt) validationError = "Selected sleeves option is no longer available.";
+              else serverPrice += opt.additionalPrice;
+            }
+            if (c.hijab?.id) {
+              const opt = optionMap.get(c.hijab.id);
+              if (!opt) validationError = "Selected hijab option is no longer available.";
+              else serverPrice += opt.additionalPrice;
+            }
+            if (c.embroidery?.id) {
+              const opt = optionMap.get(c.embroidery.id);
+              if (!opt) validationError = "Selected embroidery option is no longer available.";
+              else serverPrice += opt.additionalPrice;
+            }
+            if (c.details && Array.isArray(c.details)) {
+              for (const d of c.details) {
+                if (d.id) {
+                  const opt = optionMap.get(d.id);
+                  if (!opt) validationError = "A selected add-on is no longer available.";
+                  else serverPrice += opt.additionalPrice;
+                }
+              }
+            }
+          } catch {
+            validationError = "Invalid customization data.";
+          }
+        }
+
+        if (validationError) {
+          throw new Error(validationError);
+        }
+
+        subtotal += serverPrice * it.qty;
+        return {
+          ...it,
+          price: serverPrice,
+        };
       }
 
       // For catalog products, use the DB price — never trust client price

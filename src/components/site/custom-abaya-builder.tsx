@@ -97,8 +97,9 @@ type CustomConfig = {
   embroidery: string | null;
   details: string[];
   measurements: Record<string, string>;
-  referenceImage: string | null;
+  referenceImage: string | null; // base64 data URI for preview only (not persisted)
   referenceImageName: string | null;
+  referenceImageUrl: string | null; // Vercel Blob URL — persisted in customization JSON
   instructions: string;
 };
 
@@ -113,6 +114,7 @@ const EMPTY_CONFIG: CustomConfig = {
   measurements: {},
   referenceImage: null,
   referenceImageName: null,
+  referenceImageUrl: null,
   instructions: "",
 };
 
@@ -747,10 +749,10 @@ function Builder({ data }: { data: BuilderData; retry: () => void }) {
         additionalPrice: d.additionalPrice,
       })),
       measurements: config.measurements,
-      referenceImage: config.referenceImage
+      referenceImage: config.referenceImageUrl
         ? {
+            url: config.referenceImageUrl,
             name: config.referenceImageName,
-            dataUriLength: config.referenceImage.length,
             hasImage: true,
           }
         : null,
@@ -1592,8 +1594,9 @@ function ReferenceStep({
   setConfig: React.Dispatch<React.SetStateAction<CustomConfig>>;
 }) {
   const fileRef = React.useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = React.useState(false);
 
-  const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
@@ -1602,6 +1605,12 @@ function ReferenceStep({
       });
       return;
     }
+    if (!file.type.startsWith("image/")) {
+      toast.error("Only image files are allowed");
+      return;
+    }
+
+    // Preview locally via base64 (for immediate visual feedback)
     const reader = new FileReader();
     reader.onload = () => {
       setConfig((c) => ({
@@ -1611,6 +1620,43 @@ function ReferenceStep({
       }));
     };
     reader.readAsDataURL(file);
+
+    // Fix #3: Upload to Vercel Blob so the URL can be persisted in the
+    // customization JSON (instead of storing a multi-MB base64 data URI).
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/custom-abaya/upload-reference", {
+        method: "POST",
+        body: fd,
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        url?: string;
+        error?: string;
+      };
+      if (!res.ok || !data.ok || !data.url) {
+        throw new Error(data.error || "Upload failed");
+      }
+      setConfig((c) => ({
+        ...c,
+        referenceImageUrl: data.url!,
+      }));
+      toast.success("Reference image uploaded");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Upload failed";
+      toast.error("Could not upload reference image", { description: msg });
+      // Clear the local preview since the upload failed
+      setConfig((c) => ({
+        ...c,
+        referenceImage: null,
+        referenceImageName: null,
+        referenceImageUrl: null,
+      }));
+    } finally {
+      setUploading(false);
+    }
   };
 
   const removeImage = () => {
@@ -1618,6 +1664,7 @@ function ReferenceStep({
       ...c,
       referenceImage: null,
       referenceImageName: null,
+      referenceImageUrl: null,
     }));
     if (fileRef.current) fileRef.current.value = "";
   };

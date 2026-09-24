@@ -314,6 +314,31 @@ export function CartDrawer() {
                           <p className="mt-0.5 text-xs text-muted-foreground">
                             {line.colorName} · Size {line.size}
                           </p>
+                          {/* Fix #4: Show customization summary for custom abaya lines */}
+                          {line.customization ? (
+                            <p className="mt-0.5 text-[0.65rem] text-muted-foreground/70">
+                              {(() => {
+                                try {
+                                  const c = JSON.parse(line.customization) as {
+                                    style?: { name?: string } | null;
+                                    fabric?: { name?: string } | null;
+                                    sleeves?: { name?: string } | null;
+                                    hijab?: { name?: string } | null;
+                                    embroidery?: { name?: string } | null;
+                                  };
+                                  const parts: string[] = [];
+                                  if (c.style?.name) parts.push(c.style.name);
+                                  if (c.fabric?.name) parts.push(c.fabric.name);
+                                  if (c.sleeves?.name && c.sleeves.name !== "Standard Cuff") parts.push(c.sleeves.name);
+                                  if (c.hijab?.name && c.hijab.name !== "None (abaya only)") parts.push(c.hijab.name);
+                                  if (c.embroidery?.name && c.embroidery.name !== "None") parts.push(c.embroidery.name);
+                                  return parts.length > 0 ? parts.join(" · ") : "Custom";
+                                } catch {
+                                  return "Custom";
+                                }
+                              })()}
+                            </p>
+                          ) : null}
                         </div>
                         <button
                           type="button"

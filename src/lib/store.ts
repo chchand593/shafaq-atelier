@@ -44,10 +44,43 @@ function lineKey(l: {
   size: string;
   customization?: string | null;
 }) {
-  // Include a short customization hash in the key so two custom abayas with
-  // different options but the same color/size don't incorrectly merge.
-  const ch = l.customization ? `${l.customization.length}-${l.customization.slice(0, 8)}` : "";
-  return `${l.productId}__${l.color}__${l.size}__${ch}`;
+  // Fix #5: Create a deterministic hash from the FULL normalized customization
+  // JSON so different configurations always produce different keys. We sort
+  // the JSON keys + sort the details array by id to ensure the same config
+  // always produces the same hash. This prevents two different customizations
+  // from incorrectly merging into one cart line.
+  if (!l.customization) {
+    return `${l.productId}__${l.color}__${l.size}__`;
+  }
+  try {
+    const parsed = JSON.parse(l.customization) as Record<string, unknown>;
+    // Normalize: sort top-level keys, sort details array by id
+    const normalized: Record<string, unknown> = {};
+    for (const key of Object.keys(parsed).sort()) {
+      if (key === "details" && Array.isArray(parsed[key])) {
+        normalized[key] = (parsed[key] as Array<{ id?: string }>)
+          .slice()
+          .sort((a, b) => (a.id || "").localeCompare(b.id || ""))
+          .map((d) => d.id || "");
+      } else {
+        normalized[key] = parsed[key];
+      }
+    }
+    const canon = JSON.stringify(normalized);
+    // Simple deterministic hash (djb2) → base36
+    let hash = 5381;
+    for (let i = 0; i < canon.length; i++) {
+      hash = ((hash << 5) + hash + canon.charCodeAt(i)) | 0;
+    }
+    return `${l.productId}__${l.color}__${l.size}__${(hash >>> 0).toString(36)}`;
+  } catch {
+    // Fallback: use the raw string's length + full content hash
+    let hash = 5381;
+    for (let i = 0; i < l.customization.length; i++) {
+      hash = ((hash << 5) + hash + l.customization.charCodeAt(i)) | 0;
+    }
+    return `${l.productId}__${l.color}__${l.size}__${(hash >>> 0).toString(36)}`;
+  }
 }
 
 export const useCart = create<CartState>()(

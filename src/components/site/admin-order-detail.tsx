@@ -82,7 +82,7 @@ type CustomizationPayload = {
   embroidery?: { id: string; name: string; additionalPrice: number } | null;
   details?: Array<{ id: string; name: string; additionalPrice: number }>;
   measurements?: Record<string, string>;
-  referenceImage?: { name: string | null; dataUriLength: number; hasImage: boolean } | null;
+  referenceImage?: { url?: string; name: string | null; dataUriLength?: number; hasImage: boolean } | null;
   instructions?: string;
   basePrice?: number;
   additions?: number;
@@ -462,15 +462,25 @@ export function AdminOrderDetail({ orderNumber }: { orderNumber: string }) {
                         {hasRefImage ? (
                           <div className="mt-3">
                             <p className="text-[0.65rem] uppercase tracking-wider text-[var(--mocha)]">Reference Image</p>
-                            <div className="mt-2 rounded-md border border-[var(--gold)]/20 bg-background px-3 py-2 text-xs">
-                              <span className="text-muted-foreground">Uploaded:</span>{" "}
-                              <span className="font-medium">{c?.referenceImage?.name || "reference-image"}</span>
-                              {c?.referenceImage?.dataUriLength ? (
-                                <span className="text-muted-foreground">
-                                  {" "}· {Math.round((c.referenceImage.dataUriLength * 3) / 4 / 1024)} KB
-                                </span>
-                              ) : null}
-                            </div>
+                            {c?.referenceImage?.url ? (
+                              <div className="mt-2 inline-block">
+                                <img
+                                  src={c.referenceImage.url}
+                                  alt={c.referenceImage.name || "Reference image"}
+                                  className="max-h-48 rounded-md border border-[var(--gold)]/20 object-contain"
+                                />
+                                {c.referenceImage.name ? (
+                                  <p className="mt-1 text-xs text-muted-foreground">
+                                    {c.referenceImage.name}
+                                  </p>
+                                ) : null}
+                              </div>
+                            ) : (
+                              <div className="mt-2 rounded-md border border-[var(--gold)]/20 bg-background px-3 py-2 text-xs">
+                                <span className="text-muted-foreground">Uploaded:</span>{" "}
+                                <span className="font-medium">{c?.referenceImage?.name || "reference-image"}</span>
+                              </div>
+                            )}
                           </div>
                         ) : it.image ? (
                           <div className="mt-3">

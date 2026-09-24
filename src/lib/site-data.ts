@@ -19,6 +19,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Daily Wear", href: "/daily-wear" },
   { label: "Customized Abayas", href: "/customized-abayas" },
   { label: "New Arrivals", href: "#new-arrivals" },
+  { label: "Size Guide", href: "/size-guide" },
   { label: "About Us", href: "/about" },
   { label: "Contact Us", href: "/contact" },
 ];
