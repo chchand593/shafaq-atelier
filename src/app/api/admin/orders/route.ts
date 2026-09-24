@@ -15,26 +15,27 @@ export async function GET(request: Request) {
   const status = searchParams.get("status");
   const limit = Math.min(Number(searchParams.get("limit") || 50), 200);
 
-  const orders = await db.order.findMany({
-    where: status && status !== "all" ? { status } : undefined,
-    orderBy: { createdAt: "desc" },
-    take: limit,
-    include: { items: true },
-  });
+  try {
+    const orders = await db.order.findMany({
+      where: status && status !== "all" ? { status } : undefined,
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      include: { items: true },
+    });
 
-  return NextResponse.json({
-    orders: orders.map((o) => ({
-      id: o.id,
-      number: o.number,
-      email: o.email,
-      fullName: o.fullName,
-      phone: o.phone,
-      city: o.city,
-      payment: o.payment,
-      paymentStatus: o.paymentStatus,
-      paymentReference: o.paymentReference,
-      subtotal: o.subtotal,
-      discount: o.discount,
+    return NextResponse.json({
+      orders: orders.map((o) => ({
+        id: o.id,
+        number: o.number,
+        email: o.email,
+        fullName: o.fullName,
+        phone: o.phone,
+        city: o.city,
+        payment: o.payment,
+        paymentStatus: o.paymentStatus,
+        paymentReference: o.paymentReference,
+        subtotal: o.subtotal,
+        discount: o.discount,
       shipping: o.shipping,
       total: o.total,
       promoCode: o.promoCode,
@@ -51,4 +52,11 @@ export async function GET(request: Request) {
       })),
     })),
   });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Unknown error";
+    return NextResponse.json(
+      { error: `Failed to load orders: ${msg.substring(0, 200)}`, orders: [] },
+      { status: 500 }
+    );
+  }
 }

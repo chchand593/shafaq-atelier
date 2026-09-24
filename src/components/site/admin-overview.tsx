@@ -96,9 +96,9 @@ export function AdminOverview() {
 
   React.useEffect(() => {
     Promise.all([
-      fetch("/api/admin/orders?limit=10").then((r) => r.json()),
-      fetch("/api/admin/products").then((r) => r.json()),
-      fetch("/api/admin/analytics").then((r) => r.json()),
+      fetch("/api/admin/orders?limit=10").then((r) => r.ok ? r.json() : { orders: [] }).catch(() => ({ orders: [] })),
+      fetch("/api/admin/products").then((r) => r.ok ? r.json() : { products: [] }).catch(() => ({ products: [] })),
+      fetch("/api/admin/analytics").then((r) => r.ok ? r.json() : null).catch(() => null),
     ])
       .then(
         (

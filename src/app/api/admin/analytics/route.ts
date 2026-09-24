@@ -40,9 +40,10 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const now = new Date();
-  const todayStart = startOfDay(now);
-  const monthStart = startOfMonth(now);
+  try {
+    const now = new Date();
+    const todayStart = startOfDay(now);
+    const monthStart = startOfMonth(now);
 
   const allOrders = await db.order.findMany({
     select: {
@@ -131,4 +132,11 @@ export async function GET() {
     monthlySeries: months,
     statusBreakdown,
   });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Unknown error";
+    return NextResponse.json(
+      { error: `Failed to load analytics: ${msg.substring(0, 200)}` },
+      { status: 500 }
+    );
+  }
 }

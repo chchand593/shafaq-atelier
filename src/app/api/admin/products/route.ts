@@ -66,11 +66,19 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const products = await db.product.findMany({
-    orderBy: { createdAt: "desc" },
-  });
+  try {
+    const products = await db.product.findMany({
+      orderBy: { createdAt: "desc" },
+    });
 
-  return NextResponse.json({ products: products.map(mapProduct) });
+    return NextResponse.json({ products: products.map(mapProduct) });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Unknown error";
+    return NextResponse.json(
+      { error: `Failed to load products: ${msg.substring(0, 200)}`, products: [] },
+      { status: 500 }
+    );
+  }
 }
 
 // POST /api/admin/products — create a product
