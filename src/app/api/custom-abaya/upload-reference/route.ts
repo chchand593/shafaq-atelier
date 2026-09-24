@@ -9,22 +9,17 @@ export const dynamic = "force-dynamic";
 // Vercel Blob so it can be stored as a URL in the OrderItem.customization
 // JSON rather than a large base64 data URI.
 //
-// AUTHENTICATION: Vercel OIDC (no BLOB_READ_WRITE_TOKEN required).
-// The @vercel/blob SDK auto-detects VERCEL_OIDC_TOKEN + BLOB_STORE_ID.
-//
 // Limits: max 5 MB, image/* only.
-// Response (200): { ok: true, url, filename, size }
+// Response (200): { ok: true, url, filename }
 // Response (400): { ok: false, error: "No file provided" | "Only image files" }
 // Response (413): { ok: false, error: "File too large (max 5MB)" }
-// Response (500): { ok: false, error: "Blob storage is not configured..." }
+// Response (500): { ok: false, error: "BLOB_READ_WRITE_TOKEN not configured..." }
 
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 
 export async function POST(request: Request) {
-  // 1. Check that Blob storage is configured (OIDC or legacy token).
-  const hasOidc = !!process.env.BLOB_STORE_ID;
-  const hasLegacyToken = !!process.env.BLOB_READ_WRITE_TOKEN;
-  if (!hasOidc && !hasLegacyToken) {
+  const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
+  if (!blobToken) {
     return NextResponse.json(
       {
         ok: false,
@@ -67,8 +62,6 @@ export async function POST(request: Request) {
     );
   }
 
-  // 2. Upload to Vercel Blob.
-  // The SDK auto-detects VERCEL_OIDC_TOKEN + BLOB_STORE_ID from env.
   try {
     const { put } = await import("@vercel/blob");
     const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
@@ -80,6 +73,7 @@ export async function POST(request: Request) {
     const blob = await put(uniqueName, file, {
       access: "public",
       addRandomSuffix: false,
+      token: blobToken,
     });
 
     return NextResponse.json(
