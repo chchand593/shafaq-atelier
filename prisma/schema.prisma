@@ -281,3 +281,19 @@ model AbayaImage {
   @@index([abayaStyleId])
   @@index([colorHex])
 }
+
+// Newsletter subscribers — collected from the homepage footer form and
+// (optionally) at checkout. Idempotent on email (unique). Admin can
+// export the list as CSV via /api/admin/newsletter/export and
+// unsubscribe/delete via /api/admin/newsletter.
+model NewsletterSubscriber {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  active    Boolean  @default(true)
+  source    String   @default("homepage") // homepage | checkout | manual
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active])
+}

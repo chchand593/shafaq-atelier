@@ -130,6 +130,23 @@ ALTER TABLE "AbayaImage" DROP CONSTRAINT IF EXISTS "AbayaImage_abayaStyleId_fkey
 ALTER TABLE "AbayaImage" ADD CONSTRAINT "AbayaImage_abayaStyleId_fkey"
     FOREIGN KEY ("abayaStyleId") REFERENCES "AbayaStyle"("id") ON DELETE CASCADE;
 
+-- ---------------------------------------------------------------------------
+-- 7. Create "NewsletterSubscriber" table (newsletter signups)
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS "NewsletterSubscriber" (
+    "id"        TEXT NOT NULL,
+    "email"     TEXT NOT NULL,
+    "name"      TEXT,
+    "active"    BOOLEAN NOT NULL DEFAULT true,
+    "source"    TEXT NOT NULL DEFAULT 'homepage',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "NewsletterSubscriber_pkey" PRIMARY KEY ("id")
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS "NewsletterSubscriber_email_key" ON "NewsletterSubscriber"("email");
+CREATE INDEX IF NOT EXISTS "NewsletterSubscriber_active_idx" ON "NewsletterSubscriber"("active");
+
 COMMIT;
 
 -- ============================================================================
@@ -151,4 +168,5 @@ SELECT
     (SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'Fabric')               AS has_Fabric,
     (SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'CustomizationOption')  AS has_CustomizationOption,
     (SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'AbayaStyle')           AS has_AbayaStyle,
-    (SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'AbayaImage')           AS has_AbayaImage;
+    (SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'AbayaImage')           AS has_AbayaImage,
+    (SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'NewsletterSubscriber') AS has_NewsletterSubscriber;

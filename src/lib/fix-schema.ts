@@ -306,7 +306,37 @@ export async function runFixSchema(): Promise<FixStep[]> {
       ]
   ));
 
-  // --- 11. Admin user deduplication ---
+  // --- 11. NewsletterSubscriber table (idempotent) ---
+  steps.push(await createTableStep("NewsletterSubscriber", pg
+    ? [
+        `CREATE TABLE IF NOT EXISTS "NewsletterSubscriber" (
+            "id"        TEXT NOT NULL,
+            "email"      TEXT NOT NULL,
+            "name"       TEXT,
+            "active"     BOOLEAN NOT NULL DEFAULT true,
+            "source"     TEXT NOT NULL DEFAULT 'homepage',
+            "createdAt"  TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "updatedAt"  TIMESTAMP(3) NOT NULL,
+            CONSTRAINT "NewsletterSubscriber_pkey" PRIMARY KEY ("id")
+          )`,
+        `CREATE UNIQUE INDEX IF NOT EXISTS "NewsletterSubscriber_email_key" ON "NewsletterSubscriber"("email")`,
+        `CREATE INDEX IF NOT EXISTS "NewsletterSubscriber_active_idx" ON "NewsletterSubscriber"("active")`,
+      ]
+    : [
+        `CREATE TABLE IF NOT EXISTS "NewsletterSubscriber" (
+            "id"        TEXT NOT NULL PRIMARY KEY,
+            "email"      TEXT NOT NULL UNIQUE,
+            "name"       TEXT,
+            "active"     BOOLEAN NOT NULL DEFAULT 1,
+            "source"     TEXT NOT NULL DEFAULT 'homepage',
+            "createdAt"  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "updatedAt"  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+          )`,
+        `CREATE INDEX IF NOT EXISTS "NewsletterSubscriber_active_idx" ON "NewsletterSubscriber"("active")`,
+      ]
+  ));
+
+  // --- 12. Admin user deduplication ---
   // Production had 2 admin users (duplicate from older setup scripts).
   // Keep the canonical admin@shafaqatelier.pk; if missing, keep the first
   // admin by createdAt; delete the rest.

@@ -5,13 +5,7 @@ import { requireAdmin } from "@/lib/admin";
 export const dynamic = "force-dynamic";
 
 // GET /api/admin/newsletter/export?active=true|false&q=search
-//
-// Exports newsletter subscribers as a CSV file (Content-Type: text/csv,
-// Content-Disposition: attachment). Admin-only. Returns all matching
-// rows (no pagination) so the admin can import into Mailchimp / any
-// email tool.
-//
-// CSV columns: Email, Name, Status, Source, Subscribed At, Updated At
+// Admin-only CSV export of newsletter subscribers.
 export async function GET(request: Request) {
   const auth = await requireAdmin();
   if (!auth.ok) {
@@ -32,7 +26,6 @@ export async function GET(request: Request) {
     orderBy: { createdAt: "desc" },
   });
 
-  // Build CSV. Escape fields that contain commas/quotes/newlines.
   const esc = (v: string | null | undefined) => {
     const s = (v ?? "").toString();
     if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;

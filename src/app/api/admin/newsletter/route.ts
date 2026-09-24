@@ -4,14 +4,10 @@ import { requireAdmin } from "@/lib/admin";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/admin/newsletter?active=true|false&q=search&page=1&limit=50
-//
-// Admin-only: list newsletter subscribers. Supports filtering by active
-// status, searching by email, and pagination. Returns:
-//   {
-//     subscribers: [{ id, email, name, active, source, createdAt, updatedAt }],
-//     stats: { total, active, unsubscribed }
-//   }
+// GET /api/admin/newsletter?active=true|false&q=search&page=1&limit=100
+// Admin-only: list newsletter subscribers.
+// DELETE /api/admin/newsletter?id=<subscriberId>&hard=true
+// Unsubscribes (soft, active=false) or hard-deletes a single subscriber.
 export async function GET(request: Request) {
   const auth = await requireAdmin();
   if (!auth.ok) {
@@ -62,10 +58,6 @@ export async function GET(request: Request) {
   });
 }
 
-// DELETE /api/admin/newsletter?id=<subscriberId>
-// Unsubscribes a single subscriber (sets active=false, does NOT delete the
-// row — so the email is preserved for audit and can be reactivated). Use
-// the `?hard=true` query param to fully delete the row.
 export async function DELETE(request: Request) {
   const auth = await requireAdmin();
   if (!auth.ok) {
