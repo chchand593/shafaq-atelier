@@ -1,4 +1,13 @@
 // Prisma schema for the ShafaQ Atelier abaya store.
+//
+// The Prisma provider is auto-switched by scripts/switch-provider.sh based
+// on the DATABASE_URL environment variable:
+//   - file:...         → provider = "postgresql"      (Z.ai preview / local dev)
+//   - postgresql:...   → provider = "postgresql"  (Vercel / Neon production)
+//
+// No manual editing of this file is needed when switching environments.
+// The predev, prebuild, and postinstall npm scripts call switch-provider.sh
+// automatically before prisma generate runs.
 
 generator client {
   provider = "prisma-client-js"

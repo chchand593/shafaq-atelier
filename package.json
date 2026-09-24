@@ -3,8 +3,10 @@
   "version": "0.2.1",
   "private": true,
   "scripts": {
+    "predev": "bash scripts/switch-provider.sh && prisma generate",
     "dev": "next dev -p 3000 2>&1 | tee dev.log",
-    "postinstall": "prisma generate",
+    "prebuild": "bash scripts/switch-provider.sh",
+    "postinstall": "bash scripts/switch-provider.sh && prisma generate",
     "build": "prisma generate && next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
     "start": "NODE_ENV=production bun .next/standalone/server.js 2>&1 | tee server.log",
     "lint": "eslint .",
