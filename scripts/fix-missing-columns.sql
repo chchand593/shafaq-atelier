@@ -33,6 +33,7 @@ ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "isBestSeller" BOOLEAN NOT NULL D
 ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "isFeatured"   BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "images"       TEXT    NOT NULL DEFAULT '[]';
 ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "colorImages"  TEXT    NOT NULL DEFAULT '[]';
+ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "lowStockThreshold" INTEGER NOT NULL DEFAULT 5;
 
 -- ---------------------------------------------------------------------------
 -- 2. Create "Color" table (admin-managed color palette, 100+ colors)

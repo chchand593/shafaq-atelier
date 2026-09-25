@@ -262,9 +262,21 @@ async function runSetup() {
   results.push(`${FABRICS.length} fabrics created`);
 
   // 7. Customization Options
-  await db.customizationOption.deleteMany({});
+  // Use upsert by name+optionType instead of deleteMany+create to avoid
+  // destroying any existing customization options that the admin may have
+  // created. This is non-destructive and idempotent.
   for (const o of OPTIONS) {
-    await db.customizationOption.create({ data: o });
+    const existing = await db.customizationOption.findFirst({
+      where: { name: o.name, optionType: o.optionType },
+    });
+    if (existing) {
+      await db.customizationOption.update({
+        where: { id: existing.id },
+        data: { description: o.description, additionalPrice: o.additionalPrice, sortOrder: o.sortOrder },
+      });
+    } else {
+      await db.customizationOption.create({ data: o });
+    }
   }
   results.push(`${OPTIONS.length} customization options created`);
 

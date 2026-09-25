@@ -141,6 +141,14 @@ export async function runFixSchema(): Promise<FixStep[]> {
     )
   );
 
+  // --- 5b. Product.lowStockThreshold (was missing from original schema repair) ---
+  steps.push(
+    await addColumnStep("Product", "lowStockThreshold", pg
+      ? `ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "lowStockThreshold" INTEGER NOT NULL DEFAULT 5;`
+      : `ALTER TABLE "Product" ADD COLUMN "lowStockThreshold" INTEGER NOT NULL DEFAULT 5;`
+    )
+  );
+
   // --- 6. Color table (statements split — Postgres prepared-statement fix) ---
   steps.push(await createTableStep("Color", pg
     ? [
@@ -364,11 +372,11 @@ export async function runFixSchema(): Promise<FixStep[]> {
     } catch { /* ignore */ }
   }
 
-  // --- 14. Admin user deduplication ---
-  // Production had 2 admin users (duplicate from older setup scripts).
-  // Keep the canonical admin@shafaqatelier.pk; if missing, keep the first
-  // admin by createdAt; delete the rest.
-  steps.push(await dedupeAdminUsers());
+  // --- 14. Admin user REPORT (non-destructive) ---
+  // Reports the number of admin users. Does NOT delete any users.
+  // If duplicate admins are detected, they are reported in the step detail
+  // so the site owner can manually remove them if desired.
+  steps.push(await reportAdminUsers());
 
   return steps;
 }
@@ -418,10 +426,11 @@ async function createTableStep(table: string, statements: string[]): Promise<Fix
   }
 }
 
-// Keep exactly ONE admin user. Prefer the canonical
-// admin@shafaqatelier.pk; if not present, keep the first admin by createdAt;
-// delete every other admin.
-async function dedupeAdminUsers(): Promise<FixStep> {
+// NON-DESTRUCTIVE: Report admin users. Does NOT delete any users.
+// If duplicate admins are detected, they are reported in the detail so
+// the site owner can manually remove them via the admin panel or Neon
+// SQL Editor. This function never calls db.user.delete() or deleteMany().
+async function reportAdminUsers(): Promise<FixStep> {
   try {
     const admins = await db.user.findMany({
       where: { role: "admin" },
@@ -429,38 +438,31 @@ async function dedupeAdminUsers(): Promise<FixStep> {
       select: { id: true, email: true, name: true, createdAt: true },
     });
 
-    if (admins.length <= 1) {
+    if (admins.length === 0) {
       return {
-        label: "Admin users (dedupe)",
-        status: "skip",
-        detail: `${admins.length} admin(s) — no dedupe needed`,
+        label: "Admin users (report)",
+        status: "fail",
+        detail: "No admin users found. Run /api/admin/setup?secret=... to create one.",
       };
     }
 
-    // Find canonical (prefer admin@shafaqatelier.pk, else keep oldest)
-    const canonical =
-      admins.find((a) => a.email.toLowerCase() === "admin@shafaqatelier.pk") ??
-      admins[0];
-
-    // Delete every other admin
-    const duplicates = admins.filter((a) => a.id !== canonical.id);
-    let deleted = 0;
-    for (const dup of duplicates) {
-      try {
-        await db.user.delete({ where: { id: dup.id } });
-        deleted++;
-      } catch {
-        // Ignore individual delete failures (e.g. FK constraints).
-      }
+    if (admins.length === 1) {
+      return {
+        label: "Admin users (report)",
+        status: "ok",
+        detail: `1 admin: ${admins[0].email} — no duplicates detected.`,
+      };
     }
 
+    // Multiple admins — report but do NOT delete
+    const adminList = admins.map((a) => `${a.email} (${a.name})`).join(", ");
     return {
-      label: "Admin users (dedupe)",
+      label: "Admin users (report)",
       status: "ok",
-      detail: `Kept ${canonical.email}; deleted ${deleted} duplicate(s). Before: ${admins.length}, after: ${admins.length - deleted}.`,
+      detail: `${admins.length} admin(s) detected: ${adminList}. Multiple admins found — the canonical is admin@shafaqatelier.pk. No users were deleted. To remove duplicates, use the admin panel or Neon SQL Editor manually.`,
     };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error";
-    return { label: "Admin users (dedupe)", status: "fail", detail: msg.substring(0, 200) };
+    return { label: "Admin users (report)", status: "fail", detail: msg.substring(0, 200) };
   }
 }
