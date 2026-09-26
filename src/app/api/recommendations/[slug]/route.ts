@@ -26,6 +26,17 @@ function mapProduct(p: {
   isBestSeller: boolean;
   isFeatured: boolean;
 }) {
+  // Robustness: parse each JSON column independently with `|| "[]"` fallback
+  // and per-field try/catch so one malformed value never throws a 500 that
+  // would blank out the entire recommendations list.
+  let images: string[] = [];
+  let colorImages: ColorImage[] = [];
+  let colorOptions: ColorOption[] = [];
+  let sizes: string[] = [];
+  try { images = JSON.parse(p.images || "[]"); } catch { images = []; }
+  try { colorImages = JSON.parse(p.colorImages || "[]"); } catch { colorImages = []; }
+  try { colorOptions = JSON.parse(p.colors || "[]"); } catch { colorOptions = []; }
+  try { sizes = JSON.parse(p.sizes || "[]"); } catch { sizes = []; }
   return {
     id: p.slug,
     name: p.name,
@@ -34,11 +45,11 @@ function mapProduct(p: {
     originalPrice: p.originalPrice ?? undefined,
     image: p.image,
     // Fix #11: Include the multi-image gallery array (was missing).
-    images: JSON.parse(p.images || "[]") as string[],
-    colors: (JSON.parse(p.colors || "[]") as ColorOption[]).map((c) => c.hex),
-    colorOptions: JSON.parse(p.colors || "[]") as ColorOption[],
-    sizes: JSON.parse(p.sizes || "[]") as string[],
-    colorImages: JSON.parse(p.colorImages || "[]") as ColorImage[],
+    images,
+    colors: colorOptions.map((c) => c.hex),
+    colorOptions,
+    sizes,
+    colorImages,
     rating: p.rating,
     reviews: p.reviewCount,
     stock: p.stock,

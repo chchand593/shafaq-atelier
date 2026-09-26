@@ -7,30 +7,39 @@ export const dynamic = "force-dynamic";
 // styles are returned, each with its images ordered by sortOrder. All image
 // fields are included so the storefront gallery can render angle/label/primary
 // and apply colorHex-based previews. No auth required.
+//
+// Robustness: wrapped in try/catch — returns `{ styles: [] }` (200) on any
+// unexpected error so the Custom Abaya builder renders an empty style list
+// instead of an error page.
 export async function GET() {
-  const styles = await db.abayaStyle.findMany({
-    where: { active: true },
-    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-    select: {
-      id: true,
-      name: true,
-      slug: true,
-      description: true,
-      sortOrder: true,
-      images: {
-        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-        select: {
-          id: true,
-          url: true,
-          angle: true,
-          label: true,
-          isPrimary: true,
-          colorHex: true,
-          sortOrder: true,
+  try {
+    const styles = await db.abayaStyle.findMany({
+      where: { active: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        description: true,
+        sortOrder: true,
+        images: {
+          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+          select: {
+            id: true,
+            url: true,
+            angle: true,
+            label: true,
+            isPrimary: true,
+            colorHex: true,
+            sortOrder: true,
+          },
         },
       },
-    },
-  });
+    });
 
-  return NextResponse.json({ styles });
+    return NextResponse.json({ styles });
+  } catch (e) {
+    console.error("[/api/abaya-styles] error:", e instanceof Error ? e.message : e);
+    return NextResponse.json({ styles: [] });
+  }
 }

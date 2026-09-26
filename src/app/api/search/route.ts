@@ -50,30 +50,40 @@ export async function GET(request: Request) {
     take: limit,
   });
 
-  const mapped = products.map((p) => ({
-    id: p.slug,
-    name: p.name,
-    category: p.category as "Daily Wear" | "New Arrivals" | "Best Sellers",
-    price: p.price,
-    originalPrice: p.originalPrice ?? undefined,
-    image: p.image,
-    images: JSON.parse(p.images || "[]") as string[],
-    colorImages: JSON.parse(p.colorImages || "[]") as ColorImage[],
-    colors: (JSON.parse(p.colors || "[]") as ColorOption[]).map((c) => c.hex),
-    colorOptions: JSON.parse(p.colors || "[]") as ColorOption[],
-    sizes: JSON.parse(p.sizes || "[]") as string[],
-    rating: p.rating,
-    reviews: p.reviewCount,
-    // Fix #12: Include stock so search results can show low-stock/sold-out badges.
-    stock: p.stock,
-    badge: p.badge ?? undefined,
-    fabric: p.fabric,
-    care: p.care,
-    description: p.description,
-    isNewArrival: p.isNewArrival,
-    isBestSeller: p.isBestSeller,
-    isFeatured: p.isFeatured,
-  }));
+  const mapped = products.map((p) => {
+    let images: string[] = [];
+    let colorImages: ColorImage[] = [];
+    let colorOptions: ColorOption[] = [];
+    let sizes: string[] = [];
+    try { images = JSON.parse(p.images || "[]"); } catch { images = []; }
+    try { colorImages = JSON.parse(p.colorImages || "[]"); } catch { colorImages = []; }
+    try { colorOptions = JSON.parse(p.colors || "[]"); } catch { colorOptions = []; }
+    try { sizes = JSON.parse(p.sizes || "[]"); } catch { sizes = []; }
+    return {
+      id: p.slug,
+      name: p.name,
+      category: p.category as "Daily Wear" | "New Arrivals" | "Best Sellers",
+      price: p.price,
+      originalPrice: p.originalPrice ?? undefined,
+      image: p.image,
+      images,
+      colorImages,
+      colors: colorOptions.map((c) => c.hex),
+      colorOptions,
+      sizes,
+      rating: p.rating,
+      reviews: p.reviewCount,
+      // Fix #12: Include stock so search results can show low-stock/sold-out badges.
+      stock: p.stock,
+      badge: p.badge ?? undefined,
+      fabric: p.fabric,
+      care: p.care,
+      description: p.description,
+      isNewArrival: p.isNewArrival,
+      isBestSeller: p.isBestSeller,
+      isFeatured: p.isFeatured,
+    };
+  });
 
   return NextResponse.json({ products: mapped });
 }
