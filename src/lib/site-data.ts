@@ -44,6 +44,47 @@ export type ColorImage = {
   images?: string[];       // additional gallery images for this color (optional)
 };
 
+// Per-product Style option (e.g. "Pleated", "Open Front", "Bell Sleeve").
+// Stored as a JSON array on Product.styleOptions. The id is a stable slug
+// used to match against CombinationImage.styleId. additionalPrice is added
+// to the product base price server-side when this style is selected.
+export type StyleOption = {
+  id: string;              // stable slug, e.g. "pleated"
+  name: string;            // display name, e.g. "Pleated"
+  description?: string;    // optional short description
+  additionalPrice: number; // added to base price (PKR)
+  active: boolean;         // admin can deactivate without deleting
+  sortOrder: number;
+};
+
+// Per-product Fabric option (e.g. "Nida", "Silk", "Chiffon"). Stored as a
+// JSON array on Product.fabricOptions. additionalPrice is added server-side.
+export type FabricOption = {
+  id: string;              // stable slug, e.g. "silk"
+  name: string;
+  description?: string;
+  additionalPrice: number;
+  active: boolean;
+  sortOrder: number;
+};
+
+// Combination image — a real photo for a specific Color + Style + Fabric
+// combination. All three keys are OPTIONAL: if a key is absent, the entry
+// applies to ALL values of that dimension. The customer gallery fallback
+// chain (see product-detail.tsx buildCombinationGallery) is:
+//   1. Exact color+style+fabric match
+//   2. color+style match
+//   3. color match (falls back to Product.colorImages)
+//   4. style match
+//   5. Default Product.images gallery
+export type CombinationImage = {
+  colorHex?: string;       // optional — if absent, applies to all colors
+  styleId?: string;        // optional — if absent, applies to all styles
+  fabricId?: string;       // optional — if absent, applies to all fabrics
+  image: string;           // primary image for this combination
+  images?: string[];       // additional gallery images (optional)
+};
+
 export type Product = {
   id: string;
   name: string;
@@ -56,6 +97,11 @@ export type Product = {
   colors: string[];
   colorOptions: ColorOption[];
   sizes: string[];
+  // Per-product Style + Fabric switching (additive — existing products have
+  // empty arrays so the PDP renders without the selectors).
+  styleOptions?: StyleOption[];
+  fabricOptions?: FabricOption[];
+  combinationImages?: CombinationImage[];
   rating: number;
   reviews: number;
   stock?: number;

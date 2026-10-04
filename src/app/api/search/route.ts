@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import type { ColorImage, ColorOption } from "@/lib/site-data";
+import { mapProduct } from "@/lib/product-mapper";
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +8,8 @@ export const dynamic = "force-dynamic";
 // Customer-facing product search. Supports an optional `color` query param
 // (a HEX value) that filters products whose `colors` JSON contains that hex.
 // Only active products are returned to customers.
+//
+// Robustness: uses the shared mapProduct for defensive JSON parsing.
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const q = (searchParams.get("q") || "").trim().toLowerCase();
@@ -45,45 +47,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ products: [] });
   }
 
-  const products = await db.product.findMany({
-    where,
-    take: limit,
-  });
+  try {
+    const products = await db.product.findMany({
+      where,
+      take: limit,
+    });
 
-  const mapped = products.map((p) => {
-    let images: string[] = [];
-    let colorImages: ColorImage[] = [];
-    let colorOptions: ColorOption[] = [];
-    let sizes: string[] = [];
-    try { images = JSON.parse(p.images || "[]"); } catch { images = []; }
-    try { colorImages = JSON.parse(p.colorImages || "[]"); } catch { colorImages = []; }
-    try { colorOptions = JSON.parse(p.colors || "[]"); } catch { colorOptions = []; }
-    try { sizes = JSON.parse(p.sizes || "[]"); } catch { sizes = []; }
-    return {
-      id: p.slug,
-      name: p.name,
-      category: p.category as "Daily Wear" | "New Arrivals" | "Best Sellers",
-      price: p.price,
-      originalPrice: p.originalPrice ?? undefined,
-      image: p.image,
-      images,
-      colorImages,
-      colors: colorOptions.map((c) => c.hex),
-      colorOptions,
-      sizes,
-      rating: p.rating,
-      reviews: p.reviewCount,
-      // Fix #12: Include stock so search results can show low-stock/sold-out badges.
-      stock: p.stock,
-      badge: p.badge ?? undefined,
-      fabric: p.fabric,
-      care: p.care,
-      description: p.description,
-      isNewArrival: p.isNewArrival,
-      isBestSeller: p.isBestSeller,
-      isFeatured: p.isFeatured,
-    };
-  });
-
-  return NextResponse.json({ products: mapped });
+    return NextResponse.json({ products: products.map(mapProduct) });
+  } catch (e) {
+    console.error("[/api/search] error:", e instanceof Error ? e.message : e);
+    return NextResponse.json({ products: [] });
+  }
 }

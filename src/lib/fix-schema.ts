@@ -149,6 +149,30 @@ export async function runFixSchema(): Promise<FixStep[]> {
     )
   );
 
+  // --- 5c. Product.styleOptions / fabricOptions / combinationImages
+  // (additive — added to support per-product Style + Fabric switching on the
+  // customer PDP. All three default to "[]" so existing products continue to
+  // render with no style/fabric selector. Idempotent via ADD COLUMN IF NOT
+  // EXISTS on Postgres; on SQLite we check PRAGMA table_info first.)
+  steps.push(
+    await addColumnStep("Product", "styleOptions", pg
+      ? `ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "styleOptions" TEXT NOT NULL DEFAULT '[]';`
+      : `ALTER TABLE "Product" ADD COLUMN "styleOptions" TEXT NOT NULL DEFAULT '[]';`
+    )
+  );
+  steps.push(
+    await addColumnStep("Product", "fabricOptions", pg
+      ? `ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "fabricOptions" TEXT NOT NULL DEFAULT '[]';`
+      : `ALTER TABLE "Product" ADD COLUMN "fabricOptions" TEXT NOT NULL DEFAULT '[]';`
+    )
+  );
+  steps.push(
+    await addColumnStep("Product", "combinationImages", pg
+      ? `ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "combinationImages" TEXT NOT NULL DEFAULT '[]';`
+      : `ALTER TABLE "Product" ADD COLUMN "combinationImages" TEXT NOT NULL DEFAULT '[]';`
+    )
+  );
+
   // --- 6. Color table (statements split — Postgres prepared-statement fix) ---
   steps.push(await createTableStep("Color", pg
     ? [

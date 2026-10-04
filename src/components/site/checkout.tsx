@@ -786,6 +786,12 @@ function CheckoutInner() {
             color: l.color,
             colorName: l.colorName,
             size: l.size,
+            // NEW: send style/fabric selections so the server can re-derive
+            // the price and preserve the configuration on the OrderItem.
+            styleId: l.styleId ?? null,
+            styleName: l.styleName ?? null,
+            fabricId: l.fabricId ?? null,
+            fabricName: l.fabricName ?? null,
             customization: l.customization ?? null,
           })),
           email: form.email,

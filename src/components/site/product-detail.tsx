@@ -29,8 +29,8 @@ import { cn } from "@/lib/utils";
 import { useUI, useCart, useWishlist, useRecentlyViewed } from "@/lib/store";
 import { formatPKR } from "@/lib/format";
 import { toast } from "sonner";
-import type { Product } from "@/lib/site-data";
-import { getColorGallery } from "@/components/site/product-card";
+import type { Product, StyleOption, FabricOption } from "@/lib/site-data";
+import { getColorImage, getCombinationGallery } from "@/components/site/product-card";
 import { ProductCard } from "@/components/site/product-card";
 import { ProductReviews } from "@/components/site/product-reviews";
 import { Recommendations } from "@/components/site/recommendations";
@@ -42,20 +42,26 @@ const FRAMINGS = [
   { label: "Hem", pos: "bottom" as const, zoom: 1.5 },
 ];
 
-// Build the list of gallery "views" for a product. When the product ships a
-// multi-image `images` array we use those directly (each its own photo). When
-// it only has a single `image` we fall back to the framing variants of that
-// one image so the existing lookbook feel is preserved.
+// Build the list of gallery "views" for a product using the combination-aware
+// fallback chain (Color + Style + Fabric → Color + Style → Color → Style →
+// default gallery). When the resolved gallery has multiple images we use them
+// directly; when it resolves to a single image we fall back to the framing
+// variants of that image so the existing lookbook feel is preserved.
 type GalleryView = { src: string; label: string; pos: string; zoom: number };
 
-function buildGallery(product: Product, colorHex?: string | null): { views: GalleryView[]; isMulti: boolean } {
-  // Get all images for the selected color (or the product's default gallery)
-  const colorGallery = getColorGallery(product, colorHex ?? null);
+function buildGallery(
+  product: Product,
+  colorHex: string | null,
+  styleId: string | null,
+  fabricId: string | null
+): { views: GalleryView[]; isMulti: boolean } {
+  // Get the best gallery for the Color + Style + Fabric combination.
+  const gallery = getCombinationGallery(product, colorHex, styleId, fabricId);
 
-  if (colorGallery.length > 1) {
+  if (gallery.length > 1) {
     return {
       isMulti: true,
-      views: colorGallery.map((src, i) => ({
+      views: gallery.map((src, i) => ({
         src,
         label: `View ${i + 1}`,
         pos: "center",
@@ -65,7 +71,7 @@ function buildGallery(product: Product, colorHex?: string | null): { views: Gall
   }
 
   // Single image — use FRAMINGS of that image for the lookbook feel.
-  const src = colorGallery[0] || product.image;
+  const src = gallery[0] || product.image;
   return {
     isMulti: false,
     views: FRAMINGS.map((f) => ({
@@ -130,21 +136,51 @@ export function ProductDetail({
   const [activeColor, setActiveColor] = React.useState(
     product.colorOptions[0] ?? { hex: "#1a1a1a", name: "Default" }
   );
+  // NEW: Style + Fabric selection state. Default to the first active option
+  // when the product has any; null when the product has none (selectors are
+  // hidden in that case — backwards compatible with existing products).
+  const [activeStyle, setActiveStyle] = React.useState<StyleOption | null>(
+    product.styleOptions?.[0] ?? null
+  );
+  const [activeFabric, setActiveFabric] = React.useState<FabricOption | null>(
+    product.fabricOptions?.[0] ?? null
+  );
   const [activeSize, setActiveSize] = React.useState<string | null>(null);
   const [qty, setQty] = React.useState(1);
   const [framing, setFraming] = React.useState(0);
 
-  // Build the gallery views for this product (multi-image if available,
-  // otherwise framing variants of the single image).
-  // Build gallery — color-aware so selecting a color shows the real photo.
+  // Build the gallery views — combination-aware so selecting a color/style/
+  // fabric shows the real photo for that combination (with graceful fallback).
   const gallery = React.useMemo(
-    () => buildGallery(product, activeColor?.hex),
-    [product, activeColor?.hex]
+    () =>
+      buildGallery(
+        product,
+        activeColor?.hex ?? null,
+        activeStyle?.id ?? null,
+        activeFabric?.id ?? null
+      ),
+    [product, activeColor?.hex, activeStyle?.id, activeFabric?.id]
   );
   const views = gallery.views;
 
+  // Dynamic price: base + selected style additionalPrice + selected fabric
+  // additionalPrice. This is the DISPLAY price — the server re-derives it
+  // server-side at order creation (never trusts the client).
+  const displayedPrice = React.useMemo(() => {
+    let p = product.price;
+    if (activeStyle && typeof activeStyle.additionalPrice === "number") {
+      p += activeStyle.additionalPrice;
+    }
+    if (activeFabric && typeof activeFabric.additionalPrice === "number") {
+      p += activeFabric.additionalPrice;
+    }
+    return p;
+  }, [product.price, activeStyle, activeFabric]);
+
   React.useEffect(() => {
     setActiveColor(product.colorOptions[0] ?? { hex: "#1a1a1a", name: "Default" });
+    setActiveStyle(product.styleOptions?.[0] ?? null);
+    setActiveFabric(product.fabricOptions?.[0] ?? null);
     setActiveSize(null);
     setQty(1);
     setFraming(0);
@@ -152,13 +188,12 @@ export function ProductDetail({
     window.scrollTo({ top: 0 });
   }, [product.id, pushRecentlyViewed]);
 
-  // Fix #5: Reset framing index to 0 when the active color changes —
-  // otherwise switching from a color with N images to one with M < N
-  // images leaves framing pointing past the end of the new views array
-  // and the main image falls back to product.image.
+  // Fix #5: Reset framing index to 0 when the active color/style/fabric
+  // changes — otherwise switching to a combination with fewer images leaves
+  // framing pointing past the end of the new views array.
   React.useEffect(() => {
     setFraming(0);
-  }, [activeColor?.hex]);
+  }, [activeColor?.hex, activeStyle?.id, activeFabric?.id]);
 
   const wished = ids.includes(product.id);
 
@@ -177,29 +212,72 @@ export function ProductDetail({
       });
       return;
     }
-    // Use the color-specific image (real photo for the selected color) in the
-    // cart. Falls back to the main product image if no color image exists.
+    // Use the combination-aware image (real photo for the selected
+    // Color + Style + Fabric combination) in the cart. Falls back to the
+    // color-specific image, then to the main product image.
     const cartImage = (() => {
-      if (product.colorImages && product.colorImages.length > 0) {
-        const match = product.colorImages.find(
-          (ci) => ci.colorHex.toLowerCase() === activeColor.hex.toLowerCase()
-        );
-        if (match) return match.image;
-      }
-      return product.images?.[0] || product.image;
+      const galleryImages = getCombinationGallery(
+        product,
+        activeColor?.hex ?? null,
+        activeStyle?.id ?? null,
+        activeFabric?.id ?? null
+      );
+      if (galleryImages.length > 0) return galleryImages[0];
+      // Fallback to color-specific image (existing behaviour).
+      return getColorImage(product, activeColor?.hex ?? null);
     })();
+
+    // Build a catalog customization JSON so the order preserves the selected
+    // Style + Fabric + Color. This is SEPARATE from the custom-abaya
+    // customization JSON (which starts with "custom-" productId). The orders
+    // API re-derives the style/fabric additional prices server-side from the
+    // product's styleOptions/fabricOptions JSON columns — never trusts this
+    // client payload for pricing.
+    const hasStyleOrFabric = Boolean(activeStyle || activeFabric);
+    const catalogCustomization = hasStyleOrFabric
+      ? JSON.stringify({
+          style: activeStyle
+            ? {
+                id: activeStyle.id,
+                name: activeStyle.name,
+                additionalPrice: activeStyle.additionalPrice,
+              }
+            : null,
+          fabric: activeFabric
+            ? {
+                id: activeFabric.id,
+                name: activeFabric.name,
+                additionalPrice: activeFabric.additionalPrice,
+              }
+            : null,
+          color: activeColor
+            ? { hex: activeColor.hex, name: activeColor.name }
+            : null,
+        })
+      : null;
+
     addToCart({
       productId: product.id,
       name: product.name,
-      price: product.price,
+      // The cart line price is the displayed price (base + style + fabric).
+      // The server re-derives this at order time — never trusts the client.
+      price: displayedPrice,
       image: cartImage,
       color: activeColor.hex,
       colorName: activeColor.name,
       size: activeSize,
       qty,
+      // NEW: preserve style/fabric selections on the cart line.
+      styleId: activeStyle?.id,
+      styleName: activeStyle?.name,
+      fabricId: activeFabric?.id,
+      fabricName: activeFabric?.name,
+      customization: catalogCustomization,
     });
     toast.success("Added to your bag", {
-      description: `${product.name} · ${activeColor.name} · Size ${activeSize}`,
+      description: `${product.name} · ${activeColor.name}${
+        activeStyle ? ` · ${activeStyle.name}` : ""
+      }${activeFabric ? ` · ${activeFabric.name}` : ""} · Size ${activeSize}`,
     });
     if (openCheckout) {
       setCheckoutOpen(true);
@@ -345,7 +423,7 @@ export function ProductDetail({
           {/* Price + discount */}
           <div className="flex items-baseline gap-3">
             <span className="font-serif text-3xl font-semibold">
-              {formatPKR(product.price)}
+              {formatPKR(displayedPrice)}
             </span>
             {product.originalPrice ? (
               <>
@@ -356,6 +434,16 @@ export function ProductDetail({
                   Save {formatPKR(product.originalPrice - product.price)} ({discountPct}%)
                 </Badge>
               </>
+            ) : null}
+            {/* Show the per-component price breakdown when Style or Fabric has
+                an additional price so the customer sees exactly what they're
+                paying for. */}
+            {(activeStyle?.additionalPrice || activeFabric?.additionalPrice) ? (
+              <span className="ml-auto text-xs text-muted-foreground">
+                Base {formatPKR(product.price)}
+                {activeStyle?.additionalPrice ? ` + Style ${formatPKR(activeStyle.additionalPrice)}` : ""}
+                {activeFabric?.additionalPrice ? ` + Fabric ${formatPKR(activeFabric.additionalPrice)}` : ""}
+              </span>
             ) : null}
           </div>
 
@@ -374,7 +462,7 @@ export function ProductDetail({
                 {activeColor.name}
               </span>
             </div>
-            <div className="mt-2 flex gap-2">
+            <div className="mt-2 flex flex-wrap gap-2">
               {product.colorOptions.map((c) => (
                 <button
                   key={c.hex}
@@ -397,6 +485,72 @@ export function ProductDetail({
               ))}
             </div>
           </div>
+
+          {/* Style (per-product) — only rendered when the product has any. */}
+          {product.styleOptions && product.styleOptions.length > 0 ? (
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Style</span>
+                <span className="text-sm text-muted-foreground">
+                  {activeStyle?.name ?? "—"}
+                  {activeStyle?.additionalPrice ? ` (+${formatPKR(activeStyle.additionalPrice)})` : ""}
+                </span>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {product.styleOptions.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setActiveStyle(s)}
+                    aria-label={s.name}
+                    aria-pressed={activeStyle?.id === s.id}
+                    title={s.description || s.name}
+                    className={cn(
+                      "inline-flex h-11 min-w-12 items-center justify-center rounded-md border px-3 text-sm font-medium transition-all",
+                      activeStyle?.id === s.id
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-background hover:border-foreground/40"
+                    )}
+                  >
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {/* Fabric (per-product) — only rendered when the product has any. */}
+          {product.fabricOptions && product.fabricOptions.length > 0 ? (
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Fabric</span>
+                <span className="text-sm text-muted-foreground">
+                  {activeFabric?.name ?? "—"}
+                  {activeFabric?.additionalPrice ? ` (+${formatPKR(activeFabric.additionalPrice)})` : ""}
+                </span>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {product.fabricOptions.map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => setActiveFabric(f)}
+                    aria-label={f.name}
+                    aria-pressed={activeFabric?.id === f.id}
+                    title={f.description || f.name}
+                    className={cn(
+                      "inline-flex h-11 min-w-12 items-center justify-center rounded-md border px-3 text-sm font-medium transition-all",
+                      activeFabric?.id === f.id
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-background hover:border-foreground/40"
+                    )}
+                  >
+                    {f.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           {/* Size */}
           <div>

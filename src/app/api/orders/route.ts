@@ -30,6 +30,12 @@ export async function POST(request: Request) {
         color: string;
         colorName: string;
         size: string;
+        // NEW: per-product Style + Fabric selections (for catalog products).
+        // The server re-derives the price from these IDs — never trusts price.
+        styleId?: string | null;
+        styleName?: string | null;
+        fabricId?: string | null;
+        fabricName?: string | null;
         customization?: string | null;
       }>;
       email: string;
@@ -129,9 +135,21 @@ export async function POST(request: Request) {
     }
 
     // --- Server-side price recalculation + stock validation ---
-    // Fetch all catalog products from DB for price + stock validation
+    // Fetch all catalog products from DB for price + stock validation.
+    // We need the full row (including the JSON columns styleOptions +
+    // fabricOptions) so we can re-derive the per-product style/fabric
+    // additional prices server-side for catalog items.
     const catalogProducts = await db.product.findMany({
-      select: { slug: true, price: true, originalPrice: true, stock: true, name: true, active: true },
+      select: {
+        slug: true,
+        price: true,
+        originalPrice: true,
+        stock: true,
+        name: true,
+        active: true,
+        styleOptions: true,
+        fabricOptions: true,
+      },
     });
     const catalogMap = new Map(catalogProducts.map((p) => [p.slug, p]));
 
@@ -244,11 +262,121 @@ export async function POST(request: Request) {
         );
       }
 
-      const unitPrice = dbProduct.price;
+      // --- Re-derive the per-product Style + Fabric additional prices
+      // server-side from the product's styleOptions/fabricOptions JSON columns.
+      // The client sends styleId/fabricId + a client-computed price; we NEVER
+      // trust the client price. We re-derive: base + style + fabric.
+      let styleAdd = 0;
+      let fabricAdd = 0;
+      let serverStyleName: string | null = null;
+      let serverFabricName: string | null = null;
+
+      if (it.styleId) {
+        let styleOptions: Array<{
+          id: string;
+          name?: string;
+          additionalPrice?: number;
+          active?: boolean;
+        }> = [];
+        try {
+          const parsed = JSON.parse(dbProduct.styleOptions || "[]");
+          if (Array.isArray(parsed)) styleOptions = parsed;
+        } catch {
+          styleOptions = [];
+        }
+        const styleOpt = styleOptions.find(
+          (s) => s.id === it.styleId && s.active !== false
+        );
+        if (!styleOpt) {
+          throw new Error(
+            `Selected style is no longer available for ${dbProduct.name}.`
+          );
+        }
+        styleAdd = typeof styleOpt.additionalPrice === "number" ? styleOpt.additionalPrice : 0;
+        serverStyleName = styleOpt.name ?? null;
+      }
+
+      if (it.fabricId) {
+        let fabricOptions: Array<{
+          id: string;
+          name?: string;
+          additionalPrice?: number;
+          active?: boolean;
+        }> = [];
+        try {
+          const parsed = JSON.parse(dbProduct.fabricOptions || "[]");
+          if (Array.isArray(parsed)) fabricOptions = parsed;
+        } catch {
+          fabricOptions = [];
+        }
+        const fabricOpt = fabricOptions.find(
+          (f) => f.id === it.fabricId && f.active !== false
+        );
+        if (!fabricOpt) {
+          throw new Error(
+            `Selected fabric is no longer available for ${dbProduct.name}.`
+          );
+        }
+        fabricAdd = typeof fabricOpt.additionalPrice === "number" ? fabricOpt.additionalPrice : 0;
+        serverFabricName = fabricOpt.name ?? null;
+      }
+
+      const unitPrice = dbProduct.price + styleAdd + fabricAdd;
       subtotal += unitPrice * it.qty;
+
+      // Build / extend the OrderItem.customization JSON for catalog items so
+      // the admin order-detail page can display the selected Style + Fabric.
+      // SAFELY extends any existing customization JSON rather than replacing.
+      let catalogCustomization: string | null = null;
+      if (it.styleId || it.fabricId) {
+        let existing: Record<string, unknown> = {};
+        if (it.customization) {
+          try {
+            const parsed = JSON.parse(it.customization);
+            if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+              existing = parsed as Record<string, unknown>;
+            }
+          } catch {
+            existing = {};
+          }
+        }
+        // Rebuild style + fabric from the server-verified values (never trust
+        // client-supplied additionalPrice). Preserve any other keys (e.g.
+        // color, sleeves, etc. for custom-abaya items that also have a catalog
+        // style — though in practice catalog + custom-abaya are mutually
+        // exclusive, this is defensive).
+        const next: Record<string, unknown> = { ...existing };
+        next.style = it.styleId
+          ? {
+              id: it.styleId,
+              name: serverStyleName ?? it.styleName ?? null,
+              additionalPrice: styleAdd,
+            }
+          : existing.style ?? null;
+        next.fabric = it.fabricId
+          ? {
+              id: it.fabricId,
+              name: serverFabricName ?? it.fabricName ?? null,
+              additionalPrice: fabricAdd,
+            }
+          : existing.fabric ?? null;
+        if (!next.color && it.colorName) {
+          next.color = { hex: it.color, name: it.colorName };
+        }
+        catalogCustomization = JSON.stringify(next);
+      } else if (it.customization) {
+        // No style/fabric — preserve any existing customization as-is.
+        catalogCustomization = it.customization;
+      }
+
       return {
         ...it,
         price: unitPrice,
+        // Ensure the persisted OrderItem.customization carries the server-
+        // verified style/fabric info (used by admin order-detail).
+        customization: catalogCustomization,
+        styleName: serverStyleName ?? it.styleName ?? null,
+        fabricName: serverFabricName ?? it.fabricName ?? null,
       };
     });
 

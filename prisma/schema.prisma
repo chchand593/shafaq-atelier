@@ -45,6 +45,17 @@ model Product {
   colorImages   String   @default("[]") // JSON array of {colorHex, colorName, image} — real photos per color
   colors        String   // JSON array of {hex,name}
   sizes         String   // JSON array of strings
+  // Per-product Style options (additive — defaults to "[]" so existing
+  // products continue to work with no style selector). Each entry:
+  // { id, name, description, additionalPrice, active, sortOrder }
+  styleOptions  String   @default("[]")
+  // Per-product Fabric options (additive — defaults to "[]"). Each entry:
+  // { id, name, description, additionalPrice, active, sortOrder }
+  fabricOptions String   @default("[]")
+  // Combination images: real photos for specific Color + Style + Fabric
+  // combinations. Additive — defaults to "[]". Each entry:
+  // { colorHex?, styleId?, fabricId?, image, images? }
+  combinationImages String @default("[]")
   rating        Float    @default(4.8)
   reviewCount   Int      @default(0)
   stock         Int      @default(50)

@@ -21,12 +21,30 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { ALL_SIZES, type ColorOption } from "@/lib/site-data";
+import {
+  ALL_SIZES,
+  type ColorOption,
+  type CombinationImage,
+  type FabricOption,
+  type StyleOption,
+} from "@/lib/site-data";
 import { ImageUpload } from "@/components/site/image-upload";
 import { toast } from "sonner";
 
 const CATEGORIES = ["Daily Wear", "New Arrivals", "Best Sellers"] as const;
+
+/**
+ * Slugify a name into a stable id (used for StyleOption.id / FabricOption.id).
+ * E.g. "Pleated Sleeve" → "pleated-sleeve".
+ */
+function slugify(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
 
 const COLOR_PRESETS: ColorOption[] = [
   { hex: "#1a1a1a", name: "Black" },
@@ -56,6 +74,12 @@ type ProductForm = {
   // color's primary `image`; the rest go into the `images` array.
   colorImages: Record<string, string[]>;
   sizes: string[];
+  // Per-product Style + Fabric options and combination images (Color + Style
+  // + Fabric → image). Empty arrays by default — additive, no breaking
+  // change to existing products that have no styles/fabrics defined.
+  styleOptions: StyleOption[];
+  fabricOptions: FabricOption[];
+  combinationImages: CombinationImage[];
   // Fix #7: Feature flags so admin can set them at creation time.
   isNewArrival: boolean;
   isBestSeller: boolean;
@@ -77,6 +101,9 @@ const EMPTY_FORM: ProductForm = {
   colors: [{ hex: "#1a1a1a", name: "Black" }],
   colorImages: {},
   sizes: [...ALL_SIZES],
+  styleOptions: [],
+  fabricOptions: [],
+  combinationImages: [],
   isNewArrival: false,
   isBestSeller: false,
   isFeatured: false,
@@ -272,6 +299,121 @@ export function ProductCreateModal({
     });
   };
 
+  // ---------- Style option helpers ----------
+  // StyleOptions and FabricOptions are additive — empty arrays by default.
+  // The id is a stable slug auto-derived from the name; the user can override
+  // by typing a custom id directly. sortOrder is auto-assigned by array index.
+  const addStyle = () => {
+    setForm((f) => ({
+      ...f,
+      styleOptions: [
+        ...f.styleOptions,
+        {
+          id: "",
+          name: "",
+          description: "",
+          additionalPrice: 0,
+          active: true,
+          sortOrder: f.styleOptions.length,
+        },
+      ],
+    }));
+  };
+
+  const removeStyle = (idx: number) => {
+    setForm((f) => ({
+      ...f,
+      styleOptions: f.styleOptions
+        .filter((_, i) => i !== idx)
+        .map((s, i) => ({ ...s, sortOrder: i })),
+    }));
+  };
+
+  const updateStyle = (idx: number, patch: Partial<StyleOption>) => {
+    setForm((f) => {
+      const next = [...f.styleOptions];
+      const cur = next[idx];
+      if (!cur) return f;
+      next[idx] = { ...cur, ...patch };
+      return { ...f, styleOptions: next };
+    });
+  };
+
+  // ---------- Fabric option helpers ----------
+  // Mirror of Style — same shape, same edit pattern.
+  const addFabric = () => {
+    setForm((f) => ({
+      ...f,
+      fabricOptions: [
+        ...f.fabricOptions,
+        {
+          id: "",
+          name: "",
+          description: "",
+          additionalPrice: 0,
+          active: true,
+          sortOrder: f.fabricOptions.length,
+        },
+      ],
+    }));
+  };
+
+  const removeFabric = (idx: number) => {
+    setForm((f) => ({
+      ...f,
+      fabricOptions: f.fabricOptions
+        .filter((_, i) => i !== idx)
+        .map((s, i) => ({ ...s, sortOrder: i })),
+    }));
+  };
+
+  const updateFabric = (idx: number, patch: Partial<FabricOption>) => {
+    setForm((f) => {
+      const next = [...f.fabricOptions];
+      const cur = next[idx];
+      if (!cur) return f;
+      next[idx] = { ...cur, ...patch };
+      return { ...f, fabricOptions: next };
+    });
+  };
+
+  // ---------- Combination image helpers ----------
+  // Each entry pairs optional Color + Style + Fabric dimensions with one
+  // primary image. Omitted dimensions match "Any" (all values). The `images`
+  // array is sent as [] in the admin UI for now (single-image entries only).
+  const addCombination = () => {
+    setForm((f) => ({
+      ...f,
+      combinationImages: [
+        ...f.combinationImages,
+        {
+          colorHex: undefined,
+          styleId: undefined,
+          fabricId: undefined,
+          image: "",
+          images: [],
+        },
+      ],
+    }));
+  };
+
+  const removeCombination = (idx: number) => {
+    setForm((f) => ({
+      ...f,
+      combinationImages: f.combinationImages.filter((_, i) => i !== idx),
+    }));
+  };
+
+  const updateCombination = (idx: number, patch: Partial<CombinationImage>) => {
+    setForm((f) => {
+      const next = [...f.combinationImages];
+      const cur = next[idx];
+      if (!cur) return f;
+      next[idx] = { ...cur, ...patch };
+      return { ...f, combinationImages: next };
+    });
+  };
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -315,6 +457,43 @@ export function ProductCreateModal({
         })
         .filter((x): x is NonNullable<typeof x> => x !== null);
 
+      // Build style/fabric payloads: drop unnamed rows, auto-derive id from
+      // name if the user hasn't typed one, re-index sortOrder.
+      const styleOptionsPayload: StyleOption[] = form.styleOptions
+        .filter((s) => s.name.trim() !== "")
+        .map((s, i) => ({
+          id: s.id.trim() || slugify(s.name.trim()),
+          name: s.name.trim(),
+          description: s.description?.trim() || undefined,
+          additionalPrice: Number(s.additionalPrice) || 0,
+          active: Boolean(s.active),
+          sortOrder: i,
+        }));
+
+      const fabricOptionsPayload: FabricOption[] = form.fabricOptions
+        .filter((s) => s.name.trim() !== "")
+        .map((s, i) => ({
+          id: s.id.trim() || slugify(s.name.trim()),
+          name: s.name.trim(),
+          description: s.description?.trim() || undefined,
+          additionalPrice: Number(s.additionalPrice) || 0,
+          active: Boolean(s.active),
+          sortOrder: i,
+        }));
+
+      // Combination image payload — drop entries with no image URL. The
+      // `images` array is sent empty for now (admin UI only manages a single
+      // primary image per combination).
+      const combinationImagesPayload: CombinationImage[] = form.combinationImages
+        .filter((c) => c.image.trim() !== "")
+        .map((c) => ({
+          colorHex: c.colorHex || undefined,
+          styleId: c.styleId || undefined,
+          fabricId: c.fabricId || undefined,
+          image: c.image.trim(),
+          images: [],
+        }));
+
       const res = await fetch("/api/admin/products", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -333,6 +512,10 @@ export function ProductCreateModal({
           colorOptions: form.colors,
           colorImages: colorImagesPayload,
           sizes: form.sizes,
+          // Per-product Style / Fabric options + combination images.
+          styleOptions: styleOptionsPayload,
+          fabricOptions: fabricOptionsPayload,
+          combinationImages: combinationImagesPayload,
           badge: form.badge.trim() || undefined,
           fabric: form.fabric.trim(),
           care: form.care.trim(),
@@ -893,6 +1076,392 @@ export function ProductCreateModal({
                 additional URLs form the colour's gallery. Colours with no image
                 URLs are dropped on save (customers see the default gallery for
                 them).
+              </p>
+            </div>
+
+            {/* Styles — per-product Style options (additive, optional) */}
+            <div className="sm:col-span-2">
+              <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                <span className="block text-xs font-medium text-muted-foreground">
+                  Styles{" "}
+                  <span className="text-muted-foreground/70">
+                    (optional — e.g. Pleated, Open Front, Bell Sleeve)
+                  </span>
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addStyle}
+                  className="rounded-full"
+                >
+                  <Plus className="size-4" /> Add Style
+                </Button>
+              </div>
+              {form.styleOptions.length === 0 ? (
+                <div className="rounded-md border border-dashed px-3 py-3 text-xs text-muted-foreground">
+                  No styles defined. Customers will see the default variant
+                  only.
+                </div>
+              ) : (
+                <ul className="space-y-2">
+                  {form.styleOptions.map((s, idx) => (
+                    <li
+                      key={`st-${idx}-${s.id || "new"}`}
+                      className="flex flex-wrap items-center gap-2 rounded-md border bg-card p-2"
+                    >
+                      <Input
+                        value={s.name}
+                        onChange={(e) =>
+                          updateStyle(idx, { name: e.target.value })
+                        }
+                        onBlur={(e) => {
+                          const trimmed = e.target.value.trim();
+                          if (trimmed && !s.id) {
+                            updateStyle(idx, { id: slugify(trimmed) });
+                          }
+                        }}
+                        placeholder="Style name (e.g. Pleated)"
+                        className="h-8 w-44 text-xs"
+                        aria-label={`Style ${idx + 1} name`}
+                      />
+                      <Input
+                        value={s.id}
+                        onChange={(e) =>
+                          updateStyle(idx, { id: e.target.value })
+                        }
+                        placeholder="auto-slug"
+                        className="h-8 w-28 text-xs"
+                        aria-label={`Style ${idx + 1} id (slug)`}
+                        title="Stable id — auto-derived from the name; override only if you need a custom slug."
+                      />
+                      <Input
+                        type="number"
+                        value={String(s.additionalPrice)}
+                        onChange={(e) =>
+                          updateStyle(idx, {
+                            additionalPrice: Number(e.target.value) || 0,
+                          })
+                        }
+                        placeholder="0"
+                        min={0}
+                        className="h-8 w-24 text-xs"
+                        aria-label={`Style ${idx + 1} additional price`}
+                      />
+                      <Input
+                        value={s.description ?? ""}
+                        onChange={(e) =>
+                          updateStyle(idx, { description: e.target.value })
+                        }
+                        placeholder="Short description (optional)"
+                        className="h-8 w-48 text-xs"
+                        aria-label={`Style ${idx + 1} description`}
+                      />
+                      <div className="flex items-center gap-1.5">
+                        <Switch
+                          checked={s.active}
+                          onCheckedChange={(checked) =>
+                            updateStyle(idx, { active: checked })
+                          }
+                          aria-label={`Style ${idx + 1} active toggle`}
+                        />
+                        <span className="text-[0.65rem] uppercase tracking-wider text-muted-foreground">
+                          {s.active ? "Active" : "Off"}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeStyle(idx)}
+                        className="ml-auto inline-flex size-8 items-center justify-center rounded-md text-destructive transition-colors hover:bg-destructive/10"
+                        aria-label={`Remove ${s.name || "style"}`}
+                        title="Remove style"
+                      >
+                        <Trash2 className="size-4" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="mt-2 rounded-md border border-dashed bg-secondary/30 px-3 py-2 text-[0.7rem] leading-relaxed text-muted-foreground">
+                The id is a stable slug auto-derived from the name — edit it
+                only if you need a custom id. The additional price is added to
+                the base price server-side when this style is selected.
+                Empty/unnamed rows are dropped on save.
+              </p>
+            </div>
+
+            {/* Fabrics — per-product Fabric options (additive, optional) */}
+            <div className="sm:col-span-2">
+              <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                <span className="block text-xs font-medium text-muted-foreground">
+                  Fabrics{" "}
+                  <span className="text-muted-foreground/70">
+                    (optional — e.g. Nida, Silk, Chiffon)
+                  </span>
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addFabric}
+                  className="rounded-full"
+                >
+                  <Plus className="size-4" /> Add Fabric
+                </Button>
+              </div>
+              {form.fabricOptions.length === 0 ? (
+                <div className="rounded-md border border-dashed px-3 py-3 text-xs text-muted-foreground">
+                  No fabrics defined. Customers will see the default variant
+                  only.
+                </div>
+              ) : (
+                <ul className="space-y-2">
+                  {form.fabricOptions.map((s, idx) => (
+                    <li
+                      key={`fb-${idx}-${s.id || "new"}`}
+                      className="flex flex-wrap items-center gap-2 rounded-md border bg-card p-2"
+                    >
+                      <Input
+                        value={s.name}
+                        onChange={(e) =>
+                          updateFabric(idx, { name: e.target.value })
+                        }
+                        onBlur={(e) => {
+                          const trimmed = e.target.value.trim();
+                          if (trimmed && !s.id) {
+                            updateFabric(idx, { id: slugify(trimmed) });
+                          }
+                        }}
+                        placeholder="Fabric name (e.g. Nida)"
+                        className="h-8 w-44 text-xs"
+                        aria-label={`Fabric ${idx + 1} name`}
+                      />
+                      <Input
+                        value={s.id}
+                        onChange={(e) =>
+                          updateFabric(idx, { id: e.target.value })
+                        }
+                        placeholder="auto-slug"
+                        className="h-8 w-28 text-xs"
+                        aria-label={`Fabric ${idx + 1} id (slug)`}
+                        title="Stable id — auto-derived from the name; override only if you need a custom slug."
+                      />
+                      <Input
+                        type="number"
+                        value={String(s.additionalPrice)}
+                        onChange={(e) =>
+                          updateFabric(idx, {
+                            additionalPrice: Number(e.target.value) || 0,
+                          })
+                        }
+                        placeholder="0"
+                        min={0}
+                        className="h-8 w-24 text-xs"
+                        aria-label={`Fabric ${idx + 1} additional price`}
+                      />
+                      <Input
+                        value={s.description ?? ""}
+                        onChange={(e) =>
+                          updateFabric(idx, { description: e.target.value })
+                        }
+                        placeholder="Short description (optional)"
+                        className="h-8 w-48 text-xs"
+                        aria-label={`Fabric ${idx + 1} description`}
+                      />
+                      <div className="flex items-center gap-1.5">
+                        <Switch
+                          checked={s.active}
+                          onCheckedChange={(checked) =>
+                            updateFabric(idx, { active: checked })
+                          }
+                          aria-label={`Fabric ${idx + 1} active toggle`}
+                        />
+                        <span className="text-[0.65rem] uppercase tracking-wider text-muted-foreground">
+                          {s.active ? "Active" : "Off"}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeFabric(idx)}
+                        className="ml-auto inline-flex size-8 items-center justify-center rounded-md text-destructive transition-colors hover:bg-destructive/10"
+                        aria-label={`Remove ${s.name || "fabric"}`}
+                        title="Remove fabric"
+                      >
+                        <Trash2 className="size-4" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="mt-2 rounded-md border border-dashed bg-secondary/30 px-3 py-2 text-[0.7rem] leading-relaxed text-muted-foreground">
+                Fabrics are optional material variants. Same id/price/active
+                model as Styles. Empty/unnamed rows are dropped on save.
+              </p>
+            </div>
+
+            {/* Combination Images — Color + Style + Fabric → image */}
+            <div className="sm:col-span-2">
+              <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                <span className="block text-xs font-medium text-muted-foreground">
+                  Combination Images (Color + Style + Fabric){" "}
+                  <span className="text-muted-foreground/70">
+                    (optional — assign a specific image to a combination)
+                  </span>
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addCombination}
+                  className="rounded-full"
+                >
+                  <Plus className="size-4" /> Add Combination
+                </Button>
+              </div>
+              <p className="-mt-0.5 mb-2 text-xs text-muted-foreground">
+                Leave any dimension as “Any” to match all values of that
+                dimension. The customer gallery falls back through exact
+                match → color+style → color → style → default gallery when
+                no exact match is found.
+              </p>
+              {form.combinationImages.length === 0 ? (
+                <div className="rounded-md border border-dashed px-3 py-3 text-xs text-muted-foreground">
+                  No combination images defined. Customers will see the
+                  default gallery fallback chain.
+                </div>
+              ) : (
+                <ul className="space-y-3">
+                  {form.combinationImages.map((c, idx) => (
+                    <li
+                      key={`comb-${idx}`}
+                      className="flex flex-wrap items-start gap-3 rounded-lg border bg-card p-3"
+                    >
+                      {/* Color dropdown */}
+                      <div className="flex w-36 flex-col gap-1">
+                        <span className="text-[0.65rem] font-medium uppercase tracking-wider text-muted-foreground">
+                          Color
+                        </span>
+                        <select
+                          value={c.colorHex ?? ""}
+                          onChange={(e) =>
+                            updateCombination(idx, {
+                              colorHex: e.target.value || undefined,
+                            })
+                          }
+                          className="h-9 w-full rounded-md border bg-background px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                          aria-label={`Combination ${idx + 1} color`}
+                        >
+                          <option value="">Any color</option>
+                          {form.colors.map((col) => (
+                            <option key={col.hex} value={col.hex}>
+                              {col.name || col.hex}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Style dropdown — only shown when styles exist */}
+                      {form.styleOptions.length > 0 ? (
+                        <div className="flex w-36 flex-col gap-1">
+                          <span className="text-[0.65rem] font-medium uppercase tracking-wider text-muted-foreground">
+                            Style
+                          </span>
+                          <select
+                            value={c.styleId ?? ""}
+                            onChange={(e) =>
+                              updateCombination(idx, {
+                                styleId: e.target.value || undefined,
+                              })
+                            }
+                            className="h-9 w-full rounded-md border bg-background px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                            aria-label={`Combination ${idx + 1} style`}
+                          >
+                            <option value="">Any style</option>
+                            {form.styleOptions.map((s) => (
+                              <option key={s.id || s.name} value={s.id}>
+                                {s.name || s.id}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      ) : (
+                        <div className="flex w-36 flex-col gap-1">
+                          <span className="text-[0.65rem] font-medium uppercase tracking-wider text-muted-foreground">
+                            Style
+                          </span>
+                          <span className="flex h-9 items-center rounded-md border border-dashed px-2 text-[0.7rem] italic text-muted-foreground/70">
+                            Add styles first
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Fabric dropdown — only shown when fabrics exist */}
+                      {form.fabricOptions.length > 0 ? (
+                        <div className="flex w-36 flex-col gap-1">
+                          <span className="text-[0.65rem] font-medium uppercase tracking-wider text-muted-foreground">
+                            Fabric
+                          </span>
+                          <select
+                            value={c.fabricId ?? ""}
+                            onChange={(e) =>
+                              updateCombination(idx, {
+                                fabricId: e.target.value || undefined,
+                              })
+                            }
+                            className="h-9 w-full rounded-md border bg-background px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                            aria-label={`Combination ${idx + 1} fabric`}
+                          >
+                            <option value="">Any fabric</option>
+                            {form.fabricOptions.map((s) => (
+                              <option key={s.id || s.name} value={s.id}>
+                                {s.name || s.id}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      ) : (
+                        <div className="flex w-36 flex-col gap-1">
+                          <span className="text-[0.65rem] font-medium uppercase tracking-wider text-muted-foreground">
+                            Fabric
+                          </span>
+                          <span className="flex h-9 items-center rounded-md border border-dashed px-2 text-[0.7rem] italic text-muted-foreground/70">
+                            Add fabrics first
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Image upload */}
+                      <div className="flex min-w-[220px] flex-1 flex-col gap-1">
+                        <span className="text-[0.65rem] font-medium uppercase tracking-wider text-muted-foreground">
+                          Image
+                        </span>
+                        <ImageUpload
+                          url={c.image}
+                          onChange={(newUrl) =>
+                            updateCombination(idx, { image: newUrl })
+                          }
+                          label={`Combination ${idx + 1} image`}
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => removeCombination(idx)}
+                        className="mt-[1.4rem] inline-flex size-8 flex-none items-center justify-center rounded-md text-destructive transition-colors hover:bg-destructive/10"
+                        aria-label="Remove combination"
+                        title="Remove combination"
+                      >
+                        <Trash2 className="size-4" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="mt-2 rounded-md border border-dashed bg-secondary/30 px-3 py-2 text-[0.7rem] leading-relaxed text-muted-foreground">
+                Entries with no image URL are dropped on save. The admin UI
+                only manages a single primary image per combination; the
+                optional <code className="rounded bg-secondary px-1 py-0.5 text-[0.65rem]">images</code> array is
+                sent as an empty list.
               </p>
             </div>
 

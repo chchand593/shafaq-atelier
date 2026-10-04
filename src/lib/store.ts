@@ -18,9 +18,21 @@ export type CartLineInput = {
   colorName: string;
   size: string;
   qty: number;
+  // NEW: Per-product Style + Fabric selections (for regular catalog products
+  // that have styleOptions/fabricOptions configured by the admin). When the
+  // customer selects a Style or Fabric on the PDP, these are populated so the
+  // cart line preserves the exact configuration. Two cart lines with the same
+  // product+color+size but DIFFERENT style/fabric must NOT merge.
+  styleId?: string | null;
+  styleName?: string | null;
+  fabricId?: string | null;
+  fabricName?: string | null;
   // For custom-abaya orders: full customization details serialised as a
   // JSON string. Null for regular catalog items. Persisted to
   // OrderItem.customization when the order is placed.
+  // For regular catalog items WITH style/fabric selections, this also carries
+  // a JSON payload ({style, fabric, color}) so the order preserves the
+  // selection and the admin order-detail page can display it.
   customization?: string | null;
 };
 
@@ -42,6 +54,8 @@ function lineKey(l: {
   productId: string;
   color: string;
   size: string;
+  styleId?: string | null;
+  fabricId?: string | null;
   customization?: string | null;
 }) {
   // Fix #5: Create a deterministic hash from the FULL normalized customization
@@ -49,8 +63,14 @@ function lineKey(l: {
   // the JSON keys + sort the details array by id to ensure the same config
   // always produces the same hash. This prevents two different customizations
   // from incorrectly merging into one cart line.
+  //
+  // NEW: styleId + fabricId are included in the key prefix (before the hash)
+  // so two catalog items with the same product+color+size but DIFFERENT
+  // style/fabric selections produce DIFFERENT keys (no incorrect merge).
+  const stylePart = l.styleId ?? "";
+  const fabricPart = l.fabricId ?? "";
   if (!l.customization) {
-    return `${l.productId}__${l.color}__${l.size}__`;
+    return `${l.productId}__${l.color}__${l.size}__${stylePart}__${fabricPart}__`;
   }
   try {
     const parsed = JSON.parse(l.customization) as Record<string, unknown>;
@@ -72,14 +92,14 @@ function lineKey(l: {
     for (let i = 0; i < canon.length; i++) {
       hash = ((hash << 5) + hash + canon.charCodeAt(i)) | 0;
     }
-    return `${l.productId}__${l.color}__${l.size}__${(hash >>> 0).toString(36)}`;
+    return `${l.productId}__${l.color}__${l.size}__${stylePart}__${fabricPart}__${(hash >>> 0).toString(36)}`;
   } catch {
     // Fallback: use the raw string's length + full content hash
     let hash = 5381;
     for (let i = 0; i < l.customization.length; i++) {
       hash = ((hash << 5) + hash + l.customization.charCodeAt(i)) | 0;
     }
-    return `${l.productId}__${l.color}__${l.size}__${(hash >>> 0).toString(36)}`;
+    return `${l.productId}__${l.color}__${l.size}__${stylePart}__${fabricPart}__${(hash >>> 0).toString(36)}`;
   }
 }
 

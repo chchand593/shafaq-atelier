@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { db } from "@/lib/db";
-import type { ColorImage, ColorOption, Product } from "@/lib/site-data";
+import { mapProduct } from "@/lib/product-mapper";
 import { ProductDetail } from "@/components/site/product-detail";
 import { SiteChrome } from "@/components/site/site-chrome";
 
@@ -18,46 +18,9 @@ async function getProduct(slug: string) {
     where: { category: row.category, slug: { not: row.slug }, active: true },
     take: 4,
   });
-  // Robustness: parse each JSON column independently with `|| "[]"` fallback
-  // and per-field try/catch so a single malformed value on the product (or a
-  // related product) never throws a 500 that would blank out the PDP. Mirrors
-  // the resilience added to /api/products and /api/products/[slug].
-  const mapProduct = (r: typeof row): Product => {
-    let images: string[] = [];
-    let colorImages: ColorImage[] = [];
-    let colorOptions: ColorOption[] = [];
-    let sizes: string[] = [];
-    try { images = JSON.parse(r.images || "[]"); } catch { images = []; }
-    try { colorImages = JSON.parse(r.colorImages || "[]"); } catch { colorImages = []; }
-    try { colorOptions = JSON.parse(r.colors || "[]"); } catch { colorOptions = []; }
-    try { sizes = JSON.parse(r.sizes || "[]"); } catch { sizes = []; }
-    return {
-      id: r.slug,
-      name: r.name,
-      category: r.category as Product["category"],
-      price: r.price,
-      originalPrice: r.originalPrice ?? undefined,
-      image: r.image,
-      // Fix #3: Include the multi-image gallery array. Without this, the PDP
-      // falls back to 3 framing variants of the single `image` and never shows
-      // the multi-image gallery the admin uploaded.
-      images,
-      colors: colorOptions.map((c) => c.hex),
-      colorOptions,
-      colorImages,
-      sizes,
-      rating: r.rating,
-      reviews: r.reviewCount,
-      stock: r.stock,
-      badge: r.badge ?? undefined,
-      fabric: r.fabric,
-      care: r.care,
-      description: r.description,
-      isNewArrival: r.isNewArrival,
-      isBestSeller: r.isBestSeller,
-      isFeatured: r.isFeatured,
-    };
-  };
+  // Robustness: the shared mapProduct parses every JSON column independently
+  // with `|| "[]"` fallback + per-field try/catch so a single malformed value
+  // never throws a 500 that would blank out the PDP.
   return {
     product: mapProduct(row),
     related: related.map(mapProduct),

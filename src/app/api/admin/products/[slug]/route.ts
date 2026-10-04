@@ -2,7 +2,13 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/admin";
-import type { ColorImage, ColorOption } from "@/lib/site-data";
+import type {
+  ColorImage,
+  ColorOption,
+  CombinationImage,
+  FabricOption,
+  StyleOption,
+} from "@/lib/site-data";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +43,10 @@ export async function PATCH(
     isNewArrival?: boolean;
     isBestSeller?: boolean;
     isFeatured?: boolean;
+    // NEW: Per-product Style + Fabric options + combination images.
+    styleOptions?: StyleOption[];
+    fabricOptions?: FabricOption[];
+    combinationImages?: CombinationImage[];
   }>;
 
   const data: Record<string, unknown> = {};
@@ -59,6 +69,10 @@ export async function PATCH(
   if (body.isNewArrival !== undefined) data.isNewArrival = body.isNewArrival;
   if (body.isBestSeller !== undefined) data.isBestSeller = body.isBestSeller;
   if (body.isFeatured !== undefined) data.isFeatured = body.isFeatured;
+  // NEW: persist the 3 additive JSON columns when sent.
+  if (body.styleOptions !== undefined) data.styleOptions = JSON.stringify(body.styleOptions);
+  if (body.fabricOptions !== undefined) data.fabricOptions = JSON.stringify(body.fabricOptions);
+  if (body.combinationImages !== undefined) data.combinationImages = JSON.stringify(body.combinationImages);
 
   const product = await db.product.update({
     where: { slug },

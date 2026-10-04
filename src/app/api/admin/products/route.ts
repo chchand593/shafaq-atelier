@@ -2,10 +2,21 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/admin";
-import type { ColorImage, ColorOption } from "@/lib/site-data";
+import type {
+  ColorImage,
+  ColorOption,
+  CombinationImage,
+  FabricOption,
+  StyleOption,
+} from "@/lib/site-data";
 
 export const dynamic = "force-dynamic";
 
+// Admin mapProduct — includes ALL fields (active flag, lowStockThreshold,
+// createdAt, and the new styleOptions/fabricOptions/combinationImages) so the
+// admin UI can render the full edit form. The customer-facing mapProduct (in
+// src/lib/product-mapper.ts) filters out inactive style/fabric options; this
+// admin version returns them ALL so the admin can see/toggle them.
 function mapProduct(p: {
   id: string;
   slug: string;
@@ -18,6 +29,9 @@ function mapProduct(p: {
   colorImages: string;
   colors: string;
   sizes: string;
+  styleOptions: string;
+  fabricOptions: string;
+  combinationImages: string;
   rating: number;
   reviewCount: number;
   stock: number;
@@ -32,6 +46,22 @@ function mapProduct(p: {
   isBestSeller: boolean;
   isFeatured: boolean;
 }) {
+  // Each parse is independently guarded so a bad value never breaks the whole list.
+  let images: string[] = [];
+  let colorImages: ColorImage[] = [];
+  let colorOptions: ColorOption[] = [];
+  let sizes: string[] = [];
+  let styleOptions: StyleOption[] = [];
+  let fabricOptions: FabricOption[] = [];
+  let combinationImages: CombinationImage[] = [];
+  try { images = JSON.parse(p.images || "[]"); } catch { images = []; }
+  try { colorImages = JSON.parse(p.colorImages || "[]"); } catch { colorImages = []; }
+  try { colorOptions = JSON.parse(p.colors || "[]"); } catch { colorOptions = []; }
+  try { sizes = JSON.parse(p.sizes || "[]"); } catch { sizes = []; }
+  try { styleOptions = JSON.parse(p.styleOptions || "[]"); } catch { styleOptions = []; }
+  try { fabricOptions = JSON.parse(p.fabricOptions || "[]"); } catch { fabricOptions = []; }
+  try { combinationImages = JSON.parse(p.combinationImages || "[]"); } catch { combinationImages = []; }
+
   return {
     id: p.slug,
     name: p.name,
@@ -39,10 +69,13 @@ function mapProduct(p: {
     price: p.price,
     originalPrice: p.originalPrice ?? undefined,
     image: p.image,
-    images: JSON.parse(p.images || "[]") as string[],
-    colorImages: JSON.parse(p.colorImages || "[]") as ColorImage[],
-    colorOptions: JSON.parse(p.colors) as ColorOption[],
-    sizes: JSON.parse(p.sizes) as string[],
+    images,
+    colorImages,
+    colorOptions,
+    sizes,
+    styleOptions,
+    fabricOptions,
+    combinationImages,
     rating: p.rating,
     reviews: p.reviewCount,
     stock: p.stock,
@@ -109,6 +142,10 @@ export async function POST(request: Request) {
     isNewArrival?: boolean;
     isBestSeller?: boolean;
     isFeatured?: boolean;
+    // NEW: Per-product Style + Fabric options + combination images.
+    styleOptions?: StyleOption[];
+    fabricOptions?: FabricOption[];
+    combinationImages?: CombinationImage[];
   };
 
   if (!body.name || !body.category || !body.price || !body.image) {
@@ -137,6 +174,11 @@ export async function POST(request: Request) {
       colorImages: JSON.stringify(body.colorImages || []),
       colors: JSON.stringify(body.colorOptions || []),
       sizes: JSON.stringify(body.sizes || ["XS", "S", "M", "L", "XL", "XXL"]),
+      // NEW: persist the 3 additive JSON columns. Default to "[]" when not sent
+      // so existing admin UI flows (which don't send these fields) still work.
+      styleOptions: JSON.stringify(body.styleOptions || []),
+      fabricOptions: JSON.stringify(body.fabricOptions || []),
+      combinationImages: JSON.stringify(body.combinationImages || []),
       badge: body.badge || null,
       fabric: body.fabric || "",
       care: body.care || "",

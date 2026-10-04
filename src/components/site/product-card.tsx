@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { useUI, useWishlist, useCompare, MAX_COMPARE } from "@/lib/store";
 import { formatPKR } from "@/lib/format";
-import type { Product, ColorImage } from "@/lib/site-data";
+import type { Product, ColorImage, CombinationImage } from "@/lib/site-data";
 
 type ProductCardProps = {
   product: Product;
@@ -57,6 +57,127 @@ export function getColorGallery(
     return [primary, ...extras];
   }
   return [match.image];
+}
+
+// Find the best matching CombinationImage entry for a given color/style/fabric
+// selection. All three keys are optional on the CombinationImage entry — an
+// absent key means "applies to all values of that dimension". The matcher
+// prefers entries where the provided keys EXACTLY match the entry's keys, and
+// where the entry has MORE specified keys (more specific match wins).
+//
+// Returns `null` when no combination entry matches. The caller then falls back
+// to getColorGallery / product.images.
+function findCombinationEntry(
+  product: Product,
+  colorHex: string | null,
+  styleId: string | null,
+  fabricId: string | null
+): CombinationImage | null {
+  if (!product.combinationImages || product.combinationImages.length === 0) {
+    return null;
+  }
+  const color = colorHex?.toLowerCase() ?? null;
+  const style = styleId ?? null;
+  const fabric = fabricId ?? null;
+
+  // Score each entry: a candidate must match on every dimension where BOTH
+  // the entry and the selection specify a value. The entry's "specificity" is
+  // how many dimensions it pins down. Higher specificity + match = best.
+  let best: { entry: CombinationImage; specificity: number } | null = null;
+  for (const entry of product.combinationImages) {
+    const eColor = entry.colorHex?.toLowerCase() ?? null;
+    const eStyle = entry.styleId ?? null;
+    const eFabric = entry.fabricId ?? null;
+
+    // For each dimension: if BOTH entry and selection specify a value, they
+    // must be equal. If either is absent, that dimension is a wildcard.
+    if (eColor && color && eColor !== color) continue;
+    if (eStyle && style && eStyle !== style) continue;
+    if (eFabric && fabric && eFabric !== fabric) continue;
+
+    const specificity =
+      (eColor ? 1 : 0) + (eStyle ? 1 : 0) + (eFabric ? 1 : 0);
+    if (!best || specificity > best.specificity) {
+      best = { entry, specificity };
+    }
+  }
+  return best?.entry ?? null;
+}
+
+// Combination-aware gallery builder. Fallback chain (never returns [] empty):
+//   1. Exact Color + Style + Fabric match in product.combinationImages
+//   2. Color + Style match in combinationImages
+//   3. Color match (product.colorImages — real color photo)
+//   4. Style-only match in combinationImages
+//   5. Default product.images gallery (or product.image)
+//
+// Used by ProductDetail. Fully null-safe — never throws, never returns [].
+export function getCombinationGallery(
+  product: Product,
+  colorHex: string | null,
+  styleId: string | null,
+  fabricId: string | null
+): string[] {
+  if (!product) return ["/images/custom.jpg"];
+
+  // 1. Try the most specific combination match (color + style + fabric).
+  const exact = findCombinationEntry(product, colorHex, styleId, fabricId);
+  if (exact && exact.image) {
+    if (exact.images && Array.isArray(exact.images) && exact.images.length > 0) {
+      const primary = exact.image;
+      const extras = exact.images.filter((img) => img !== primary);
+      const all = [primary, ...extras].filter((u) => typeof u === "string" && u.length > 0);
+      if (all.length > 0) return all;
+    }
+    if (typeof exact.image === "string" && exact.image.length > 0) return [exact.image];
+  }
+
+  // 2. Try color + style (drop fabric).
+  if (fabricId) {
+    const cs = findCombinationEntry(product, colorHex, styleId, null);
+    if (cs && cs.image) {
+      if (cs.images && Array.isArray(cs.images) && cs.images.length > 0) {
+        const primary = cs.image;
+        const extras = cs.images.filter((img) => img !== primary);
+        const all = [primary, ...extras].filter((u) => typeof u === "string" && u.length > 0);
+        if (all.length > 0) return all;
+      }
+      if (typeof cs.image === "string" && cs.image.length > 0) return [cs.image];
+    }
+  }
+
+  // 3. Try color only (existing colorImages — real color photo).
+  if (colorHex) {
+    const colorGallery = getColorGallery(product, colorHex);
+    // Only use the color gallery if it actually found a color-specific image
+    // (getColorGallery falls back to product.images when no match). We detect
+    // a real match by checking if colorImages has an entry for this hex.
+    const hasColorMatch =
+      product.colorImages &&
+      product.colorImages.some(
+        (ci) => ci.colorHex?.toLowerCase() === colorHex.toLowerCase()
+      );
+    if (hasColorMatch && colorGallery.length > 0) return colorGallery;
+  }
+
+  // 4. Try style-only match (drop color + fabric).
+  if (styleId) {
+    const styleOnly = findCombinationEntry(product, null, styleId, null);
+    if (styleOnly && styleOnly.image) {
+      if (styleOnly.images && Array.isArray(styleOnly.images) && styleOnly.images.length > 0) {
+        const primary = styleOnly.image;
+        const extras = styleOnly.images.filter((img) => img !== primary);
+        const all = [primary, ...extras].filter((u) => typeof u === "string" && u.length > 0);
+        if (all.length > 0) return all;
+      }
+      if (typeof styleOnly.image === "string" && styleOnly.image.length > 0) return [styleOnly.image];
+    }
+  }
+
+  // 5. Final fallback — default product gallery.
+  return product.images?.length
+    ? product.images
+    : [product.image || "/images/custom.jpg"];
 }
 
 export function ProductCard({ product, className }: ProductCardProps) {
