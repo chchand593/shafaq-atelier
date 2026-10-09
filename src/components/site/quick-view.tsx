@@ -31,8 +31,8 @@ import {
 import { cn } from "@/lib/utils";
 import { useUI, useCart, useWishlist, useRecentlyViewed } from "@/lib/store";
 import { useApiProducts } from "@/lib/use-products";
-import type { Product } from "@/lib/site-data";
-import { getColorImage, getColorGallery } from "@/components/site/product-card";
+import type { Product, StyleOption, FabricOption } from "@/lib/site-data";
+import { getColorImage, getCombinationGallery } from "@/components/site/product-card";
 import { formatPKR } from "@/lib/format";
 import { toast } from "sonner";
 import { ProductCard } from "@/components/site/product-card";
@@ -54,12 +54,18 @@ type GalleryView = {
   zoom: "100%" | "150%";
 };
 
-function buildGallery(product: Product, colorHex?: string | null): GalleryView[] {
-  // Get all images for the selected color (or the product's default gallery)
-  const colorGallery = getColorGallery(product, colorHex ?? null);
+function buildGallery(
+  product: Product,
+  colorHex: string | null,
+  styleId: string | null,
+  fabricId: string | null
+): GalleryView[] {
+  // Get all images for the selected color + style + fabric combination (with
+  // graceful fallback chain: exact → color+style → color → style → default).
+  const gallery = getCombinationGallery(product, colorHex, styleId, fabricId);
 
-  if (colorGallery.length > 1) {
-    return colorGallery.map((src, i) => ({
+  if (gallery.length > 1) {
+    return gallery.map((src, i) => ({
       src,
       label: `View ${i + 1}`,
       pos: "center",
@@ -68,7 +74,7 @@ function buildGallery(product: Product, colorHex?: string | null): GalleryView[]
   }
 
   // Single image — use FRAMINGS for the lookbook feel.
-  const src = colorGallery[0] || product.image;
+  const src = gallery[0] || product.image;
   return FRAMINGS.map((f) => ({ src, ...f }));
 }
 
@@ -121,33 +127,62 @@ function QuickViewInner({ product }: { product: Product }) {
   const [activeColor, setActiveColor] = React.useState(
     product.colorOptions[0] ?? { hex: "#1a1a1a", name: "Default" }
   );
+  // NEW: Style + Fabric selection state. Default to the first active option
+  // when the product has any; null when the product has none (selectors are
+  // hidden in that case — backwards compatible with existing products).
+  const [activeStyle, setActiveStyle] = React.useState<StyleOption | null>(
+    product.styleOptions?.[0] ?? null
+  );
+  const [activeFabric, setActiveFabric] = React.useState<FabricOption | null>(
+    product.fabricOptions?.[0] ?? null
+  );
   const [activeSize, setActiveSize] = React.useState<string | null>(null);
   const [qty, setQty] = React.useState(1);
   const [framing, setFraming] = React.useState(0);
 
-  // Build gallery views — color-aware so selecting a color shows the real
-  // photo for that color. Rebuilds when the product or selected color changes.
+  // Build gallery views — combination-aware so selecting a color/style/fabric
+  // shows the real photo for that combination (with graceful fallback).
   const views = React.useMemo(
-    () => buildGallery(product, activeColor?.hex),
-    [product, activeColor?.hex]
+    () =>
+      buildGallery(
+        product,
+        activeColor?.hex ?? null,
+        activeStyle?.id ?? null,
+        activeFabric?.id ?? null
+      ),
+    [product, activeColor?.hex, activeStyle?.id, activeFabric?.id]
   );
+
+  // Dynamic price: base + selected style additionalPrice + selected fabric
+  // additionalPrice. This is the DISPLAY price — the server re-derives it
+  // server-side at order creation (never trusts the client).
+  const displayedPrice = React.useMemo(() => {
+    let p = product.price;
+    if (activeStyle && typeof activeStyle.additionalPrice === "number") {
+      p += activeStyle.additionalPrice;
+    }
+    if (activeFabric && typeof activeFabric.additionalPrice === "number") {
+      p += activeFabric.additionalPrice;
+    }
+    return p;
+  }, [product.price, activeStyle, activeFabric]);
 
   // reset selections when product changes
   React.useEffect(() => {
     setActiveColor(product.colorOptions[0] ?? { hex: "#1a1a1a", name: "Default" });
+    setActiveStyle(product.styleOptions?.[0] ?? null);
+    setActiveFabric(product.fabricOptions?.[0] ?? null);
     setActiveSize(null);
     setQty(1);
     setFraming(0);
   }, [product.id]);
 
-  // Fix #5: Reset framing index to 0 when the active color changes — otherwise
-  // switching from a color with N images to one with M < N images leaves
-  // framing pointing past the end of the new views array and the main
-  // image falls back to product.image. Mirrors the same fix in
-  // src/components/site/product-detail.tsx.
+  // Fix #5: Reset framing index to 0 when the active color/style/fabric
+  // changes — otherwise switching to a combination with fewer images leaves
+  // framing pointing past the end of the new views array.
   React.useEffect(() => {
     setFraming(0);
-  }, [activeColor?.hex]);
+  }, [activeColor?.hex, activeStyle?.id, activeFabric?.id]);
 
   // track recently viewed whenever a new product is opened
   React.useEffect(() => {
@@ -171,21 +206,68 @@ function QuickViewInner({ product }: { product: Product }) {
       });
       return;
     }
-    // Use the color-specific image (real photo for the selected color) in the
-    // cart. Falls back to the main product image if no color image exists.
-    const cartImage = getColorImage(product, activeColor.hex);
+    // Use the combination-aware image (real photo for the selected
+    // Color + Style + Fabric combination) in the cart. Falls back to the
+    // color-specific image, then to the main product image.
+    const cartImage = (() => {
+      const galleryImages = getCombinationGallery(
+        product,
+        activeColor?.hex ?? null,
+        activeStyle?.id ?? null,
+        activeFabric?.id ?? null
+      );
+      if (galleryImages.length > 0) return galleryImages[0];
+      return getColorImage(product, activeColor?.hex ?? null);
+    })();
+
+    // Build a catalog customization JSON so the order preserves the selected
+    // Style + Fabric + Color. The orders API re-derives the style/fabric
+    // additional prices server-side — never trusts this client payload.
+    const hasStyleOrFabric = Boolean(activeStyle || activeFabric);
+    const catalogCustomization = hasStyleOrFabric
+      ? JSON.stringify({
+          style: activeStyle
+            ? {
+                id: activeStyle.id,
+                name: activeStyle.name,
+                additionalPrice: activeStyle.additionalPrice,
+              }
+            : null,
+          fabric: activeFabric
+            ? {
+                id: activeFabric.id,
+                name: activeFabric.name,
+                additionalPrice: activeFabric.additionalPrice,
+              }
+            : null,
+          color: activeColor
+            ? { hex: activeColor.hex, name: activeColor.name }
+            : null,
+        })
+      : null;
+
     addToCart({
       productId: product.id,
       name: product.name,
-      price: product.price,
+      // The cart line price is the displayed price (base + style + fabric).
+      // The server re-derives this at order time — never trusts the client.
+      price: displayedPrice,
       image: cartImage,
       color: activeColor.hex,
       colorName: activeColor.name,
       size: activeSize,
       qty,
+      // NEW: preserve style/fabric selections on the cart line.
+      styleId: activeStyle?.id,
+      styleName: activeStyle?.name,
+      fabricId: activeFabric?.id,
+      fabricName: activeFabric?.name,
+      customization: catalogCustomization,
     });
     toast.success("Added to your bag", {
-      description: `${product.name} · ${activeColor.name} · Size ${activeSize}`,
+      description: `${product.name} · ${activeColor.name}${
+        activeStyle ? ` · ${activeStyle.name}` : ""
+      }${activeFabric ? ` · ${activeFabric.name}` : ""} · Size ${activeSize}`,
     });
     closeQuickView();
   };
@@ -284,7 +366,7 @@ function QuickViewInner({ product }: { product: Product }) {
 
           <div className="flex items-baseline gap-3">
             <span className="font-serif text-2xl font-semibold">
-              {formatPKR(product.price)}
+              {formatPKR(displayedPrice)}
             </span>
             {product.originalPrice ? (
               <>
@@ -295,6 +377,16 @@ function QuickViewInner({ product }: { product: Product }) {
                   Save {formatPKR(product.originalPrice - product.price)}
                 </Badge>
               </>
+            ) : null}
+            {/* Show the per-component price breakdown when Style or Fabric has
+                an additional price so the customer sees exactly what they're
+                paying for. */}
+            {(activeStyle?.additionalPrice || activeFabric?.additionalPrice) ? (
+              <span className="ml-auto text-xs text-muted-foreground">
+                Base {formatPKR(product.price)}
+                {activeStyle?.additionalPrice ? ` + Style ${formatPKR(activeStyle.additionalPrice)}` : ""}
+                {activeFabric?.additionalPrice ? ` + Fabric ${formatPKR(activeFabric.additionalPrice)}` : ""}
+              </span>
             ) : null}
           </div>
 
@@ -310,7 +402,7 @@ function QuickViewInner({ product }: { product: Product }) {
               <span className="text-sm font-medium">Colour</span>
               <span className="text-sm text-muted-foreground">{activeColor.name}</span>
             </div>
-            <div className="mt-2 flex gap-2">
+            <div className="mt-2 flex flex-wrap gap-2">
               {product.colorOptions.map((c) => (
                 <button
                   key={c.hex}
@@ -333,6 +425,72 @@ function QuickViewInner({ product }: { product: Product }) {
               ))}
             </div>
           </div>
+
+          {/* Style (per-product) — only rendered when the product has any. */}
+          {product.styleOptions && product.styleOptions.length > 0 ? (
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Style</span>
+                <span className="text-sm text-muted-foreground">
+                  {activeStyle?.name ?? "—"}
+                  {activeStyle?.additionalPrice ? ` (+${formatPKR(activeStyle.additionalPrice)})` : ""}
+                </span>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {product.styleOptions.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setActiveStyle(s)}
+                    aria-label={s.name}
+                    aria-pressed={activeStyle?.id === s.id}
+                    title={s.description || s.name}
+                    className={cn(
+                      "inline-flex h-10 min-w-11 items-center justify-center rounded-md border px-3 text-sm font-medium transition-all",
+                      activeStyle?.id === s.id
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-background hover:border-foreground/40"
+                    )}
+                  >
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {/* Fabric (per-product) — only rendered when the product has any. */}
+          {product.fabricOptions && product.fabricOptions.length > 0 ? (
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Fabric</span>
+                <span className="text-sm text-muted-foreground">
+                  {activeFabric?.name ?? "—"}
+                  {activeFabric?.additionalPrice ? ` (+${formatPKR(activeFabric.additionalPrice)})` : ""}
+                </span>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {product.fabricOptions.map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => setActiveFabric(f)}
+                    aria-label={f.name}
+                    aria-pressed={activeFabric?.id === f.id}
+                    title={f.description || f.name}
+                    className={cn(
+                      "inline-flex h-10 min-w-11 items-center justify-center rounded-md border px-3 text-sm font-medium transition-all",
+                      activeFabric?.id === f.id
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-background hover:border-foreground/40"
+                    )}
+                  >
+                    {f.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           {/* Size */}
           <div>
