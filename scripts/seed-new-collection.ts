@@ -85,6 +85,8 @@ const COLLECTION: ProductDef[] = [
       { colorHex: "#1a1a1a", styleId: "closed-front", fabricId: "nida", suffix: "black-closed-nida" },
       { colorHex: "#1a1a1a", styleId: "open-front", fabricId: "crepe", suffix: "black-open-crepe" },
       { colorHex: "#6b5246", styleId: "pleated", fabricId: "nida", suffix: "mocha-pleated-nida" },
+      // NEW: Chiffon fabric coverage
+      { colorHex: "#8a9a7b", styleId: "pleated", fabricId: "chiffon", suffix: "sage-pleated-chiffon" },
     ],
   },
   {
@@ -189,6 +191,8 @@ const COLLECTION: ProductDef[] = [
     combos: [
       { colorHex: "#5c1a2b", styleId: "bell-sleeve", fabricId: "heavyweight-crepe", suffix: "burgundy-bell-heavy" },
       { colorHex: "#1a4d3a", styleId: "bell-sleeve", fabricId: "satin-crepe", suffix: "forest-bell-satin" },
+      // NEW: Silk Blend fabric coverage
+      { colorHex: "#c9a24b", styleId: "bell-sleeve", fabricId: "silk", suffix: "gold-bell-silk" },
       // NOTE: The Gold+Flared+Silk combo image was removed because it failed
       // AI generation (content filter). The customer gallery fallback chain
       // handles this gracefully: Gold+Flared+Silk will fall back through
@@ -230,6 +234,9 @@ const COLLECTION: ProductDef[] = [
       { colorHex: "#1a1a1a", styleId: "wrap", fabricId: "silk", suffix: "black-wrap-silk" },
       { colorHex: "#9a7a8a", styleId: "wrap", fabricId: "silk", suffix: "mauve-wrap-silk" },
       { colorHex: "#e8d4a8", styleId: "pleated", fabricId: "silk", suffix: "champagne-pleated-silk" },
+      // NEW: Satin Crepe + Chiffon fabric coverage
+      { colorHex: "#1a1a1a", styleId: "wrap", fabricId: "satin-crepe", suffix: "black-wrap-satin" },
+      { colorHex: "#9a7a8a", styleId: "open-front", fabricId: "chiffon", suffix: "mauve-open-chiffon" },
     ],
   },
   {
@@ -405,6 +412,8 @@ const COLLECTION: ProductDef[] = [
       { colorHex: "#1a1a1a", styleId: "couture", fabricId: "silk", suffix: "black-couture-silk" },
       { colorHex: "#c9a24b", styleId: "full", fabricId: "silk", suffix: "gold-full-silk" },
       { colorHex: "#722f37", styleId: "couture", fabricId: "heavyweight-crepe", suffix: "wine-couture-heavy" },
+      // NEW: Satin Crepe fabric coverage
+      { colorHex: "#1a1a1a", styleId: "couture", fabricId: "satin-crepe", suffix: "black-couture-satin" },
     ],
   },
 ];
